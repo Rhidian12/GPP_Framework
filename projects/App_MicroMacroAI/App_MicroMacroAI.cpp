@@ -28,6 +28,7 @@ App_MicroMacroAI::~App_MicroMacroAI()
 	SAFE_DELETE(m_pAgent);
 	SAFE_DELETE(m_pWander);
 	SAFE_DELETE(m_pFlee);
+	SAFE_DELETE(m_pSeek);
 }
 
 void App_MicroMacroAI::Start()
@@ -38,19 +39,6 @@ void App_MicroMacroAI::Start()
 	DEBUGRENDERER2D->GetActiveCamera()->SetCenter(Elite::Vector2(12.9361f, 0.2661f));
 
 	//----------- WORLD ------------
-	//m_vNavigationColliders.push_back(new NavigationColliderElement{ Elite::Vector2{-30.f,-30.f},1.f,80.f,90.f });
-	//m_vNavigationColliders.push_back(new NavigationColliderElement{ Elite::Vector2{60.f,-80.f},40.f,1.f });
-	//m_vNavigationColliders.push_back(new NavigationColliderElement{ Elite::Vector2{10.f,-80.f},40.f,1.f });
-	//m_vNavigationColliders.push_back(new NavigationColliderElement{ Elite::Vector2{10.f,50.f},70.f,1.f });
-	//m_vNavigationColliders.push_back(new NavigationColliderElement{ Elite::Vector2{-80.f,-10.f},1.f,40.f,90.f });
-	//m_vNavigationColliders.push_back(new NavigationColliderElement{ Elite::Vector2{-50.f,60.f},40.f,1.f });
-	//m_vNavigationColliders.push_back(new NavigationColliderElement{ Elite::Vector2{80.f,20.f},1.f,40.f,90.f });
-	//m_vNavigationColliders.push_back(new NavigationColliderElement{ Elite::Vector2{-70.f,-60.f},40.f,1.f });
-	//m_vNavigationColliders.push_back(new NavigationColliderElement{ Elite::Vector2{30.f,20.f},40.f,1.f });
-	//m_vNavigationColliders.push_back(new NavigationColliderElement{ Elite::Vector2{20.f,-30.f},1.f,30.f,90.f });
-	//m_vNavigationColliders.push_back(new NavigationColliderElement{ Elite::Vector2{-90.f,-78.f},1.f,30.f,90.f });
-	//m_vNavigationColliders.push_back(new NavigationColliderElement{ Elite::Vector2{50.f,78.f},1.f,30.f,90.f });
-
 	m_vNavigationColliders.push_back(new NavigationColliderElement{ Elite::Vector2{0.f,-90.f},170.f,1.f });
 	m_vNavigationColliders.push_back(new NavigationColliderElement{ Elite::Vector2{0.f,90.f},170.f,1.f });
 	m_vNavigationColliders.push_back(new NavigationColliderElement{ Elite::Vector2{88.f,0.f},1.f,175.f,90.f });
@@ -65,6 +53,8 @@ void App_MicroMacroAI::Start()
 	m_vNavigationColliders.push_back(new NavigationColliderElement{ Elite::Vector2{35.f,-25.f},1.f,20.f,90.f });
 	m_vNavigationColliders.push_back(new NavigationColliderElement{ Elite::Vector2{-20.f,-35.f},60.f,1.f });
 	m_vNavigationColliders.push_back(new NavigationColliderElement{ Elite::Vector2{0.f,-57.f},1.f,20.f,90.f });
+	m_vNavigationColliders.push_back(new NavigationColliderElement{ Elite::Vector2{0.f,5.f},90.f,1.f });
+	m_vNavigationColliders.push_back(new NavigationColliderElement{ Elite::Vector2{0.f,58.f},130.f,1.f });
 
 	//----------- NAVMESH  ------------
 	std::list<Elite::Vector2> baseBox
@@ -75,9 +65,10 @@ void App_MicroMacroAI::Start()
 	//----------- AGENT ------------
 	m_pWander = new Wander{};
 	m_pFlee = new Flee{};
+	m_pSeek = new Seek{};
 	m_Target = TargetData(Elite::ZeroVector2);
 	m_pAgent = new SteeringAgent();
-	m_pAgent->SetSteeringBehavior(m_pWander);
+	m_pAgent->SetSteeringBehavior(m_pSeek);
 	m_pAgent->SetMaxLinearSpeed(m_AgentSpeed);
 	m_pAgent->SetAutoOrient(true);
 	m_pAgent->SetMass(0.1f);
@@ -85,10 +76,40 @@ void App_MicroMacroAI::Start()
 }
 void App_MicroMacroAI::Update(float deltaTime)
 {
+	//Update target/path based on input
+	if (INPUTMANAGER->IsMouseButtonUp(InputMouseButton::eMiddle))
+	{
+		auto mouseData = INPUTMANAGER->GetMouseData(Elite::InputType::eMouseButton, Elite::InputMouseButton::eMiddle);
+		Elite::Vector2 mouseTarget = DEBUGRENDERER2D->GetActiveCamera()->ConvertScreenToWorld(
+			Elite::Vector2((float)mouseData.X, (float)mouseData.Y));
+		m_vPath = FindPath(m_pAgent->GetPosition(), mouseTarget);
+	}
+
+	//Check if a path exist and move to the following point
+	if (m_vPath.size() > 0)
+	{
+		if (m_vPath.size() == 1)
+		{
+			m_pAgent->SetSteeringBehavior(m_pSeek);
+			m_pSeek->SetTarget(m_vPath[0]);
+		}
+		else
+		{
+			m_pAgent->SetSteeringBehavior(m_pSeek);
+			m_pSeek->SetTarget(m_vPath[0]);
+		}
+
+		if (Elite::DistanceSquared(m_pAgent->GetPosition(), m_vPath[0]) < m_AgentRadius * m_AgentRadius)
+		{
+			//If we reached the next point of the path. Remove it 
+			m_vPath.erase(std::remove(m_vPath.begin(), m_vPath.end(), m_vPath[0]));
+		}
+	}
+
 	UpdateImGui();
 
 	m_pAgent->Update(deltaTime);
-	m_pAgent->TrimToWorld(Elite::Vector2{ -100.f,-100.f }, Elite::Vector2{ 100.f,100.f });
+	//m_pAgent->TrimToWorld(Elite::Vector2{ -100.f,-100.f }, Elite::Vector2{ 100.f,100.f });
 }
 void App_MicroMacroAI::Render(float deltaTime) const
 {
@@ -144,7 +165,102 @@ void App_MicroMacroAI::Render(float deltaTime) const
 
 	}
 #pragma endregion
-	DEBUGRENDERER2D->DrawSolidCircle(m_pAgent->GetPosition(), m_pAgent->GetRadius(), Elite::Vector2{ 1.f,0.f }, Elite::Color{ 0.f,0.f,255.f,0.5f });
+	//DEBUGRENDERER2D->DrawSolidCircle(m_pAgent->GetPosition(), m_pAgent->GetRadius(), Elite::Vector2{ 1.f,0.f }, Elite::Color{ 0.f,0.f,255.f,0.5f });
+}
+
+const std::vector<Elite::Vector2> App_MicroMacroAI::FindPath(const Elite::Vector2& startPos, const Elite::Vector2& endPos)
+{
+	//Create the path to return
+	std::vector<Elite::Vector2> finalPath{};
+	m_DebugNodePositions.clear();
+
+	//Get the start and endTriangle
+	const Elite::Triangle* pStartTriangle{ m_pNavGraph->GetNavMeshPolygon()->GetTriangleFromPosition(startPos) };
+	const Elite::Triangle* pEndTriangle{ m_pNavGraph->GetNavMeshPolygon()->GetTriangleFromPosition(endPos) };
+
+	//If we have valid start/end triangles and they are not the same
+	if (pStartTriangle == nullptr || pEndTriangle == nullptr)
+	{
+		std::cout << "Triangle was nullptr! App_NavMeshGraph.cpp FindPath()" << std::endl;
+		return finalPath;
+	}
+	if (pStartTriangle == pEndTriangle)
+	{
+		finalPath.push_back(endPos);
+		return finalPath;
+	}
+
+	//=> Start looking for a path
+
+	//Copy the graph
+	auto pCopiedGraph{ m_pNavGraph->Clone() };
+	//auto pCopiedGraph = m_pNavGraph;
+	int index{ pCopiedGraph->GetNextFreeNodeIndex() };
+
+	//Create extra node for the Start Node (Agent's position)
+	Elite::NavGraphNode* pStartNode{ new Elite::NavGraphNode{index,pStartTriangle->metaData.IndexLines[0],m_pAgent->GetPosition()} };
+	pCopiedGraph->AddNode(pStartNode);
+
+	for (auto pEdge : pStartTriangle->metaData.IndexLines)
+	{
+		auto lineIndexFinder{ std::find_if(pCopiedGraph->GetAllNodes().begin(),pCopiedGraph->GetAllNodes().end(),[&pEdge](const NavGraphNode* n)->bool
+			{
+				return n->GetLineIndex() == pEdge;
+				}) };
+		if (lineIndexFinder != pCopiedGraph->GetAllNodes().end())
+		{
+			if (pCopiedGraph->IsNodeValid((*lineIndexFinder)->GetIndex())) // if there is a valid node
+			{
+				GraphNode2D* pValidEdgeNode{ pCopiedGraph->GetNode((*lineIndexFinder)->GetIndex()) };
+				if (pValidEdgeNode != pStartNode) // if that valid node is not the start node, because we don't want a connection to itself
+				{
+					GraphConnection2D* pNewConnection{ new GraphConnection2D{pStartNode->GetIndex(),pValidEdgeNode->GetIndex(),
+					Distance(pStartNode->GetPosition(),pValidEdgeNode->GetPosition())} };
+					pCopiedGraph->AddConnection(pNewConnection);
+				}
+			}
+		}
+	}
+
+	//Create extra node for the End Node
+	index = pCopiedGraph->GetNextFreeNodeIndex();
+	Elite::NavGraphNode* pEndNode{ new Elite::NavGraphNode{index,pEndTriangle->metaData.IndexLines[0],endPos} };
+	pCopiedGraph->AddNode(pEndNode);
+	for (auto pEdge : pEndTriangle->metaData.IndexLines)
+	{
+		auto lineIndexFinder{ std::find_if(pCopiedGraph->GetAllNodes().begin(),pCopiedGraph->GetAllNodes().end(),[pEdge](const NavGraphNode* n)->bool
+			{
+				return n->GetLineIndex() == pEdge;
+				}) };
+		if (lineIndexFinder != pCopiedGraph->GetAllNodes().end())
+		{
+			if (pCopiedGraph->IsNodeValid((*lineIndexFinder)->GetIndex())) // if there is a valid node
+			{
+				GraphNode2D* pValidEdgeNode{ pCopiedGraph->GetNode((*lineIndexFinder)->GetIndex()) };
+				if (pValidEdgeNode != pEndNode) // if that valid node is not the start node
+				{
+					GraphConnection2D* pNewConnection{ new GraphConnection2D{pEndNode->GetIndex(),pValidEdgeNode->GetIndex(),
+					Distance(pEndNode->GetPosition(),pValidEdgeNode->GetPosition())} };
+					pCopiedGraph->AddConnection(pNewConnection);
+				}
+			}
+		}
+	}
+
+	//Run A star on new graph
+	auto pathfinder = AStar<NavGraphNode, GraphConnection2D>(pCopiedGraph.get(), Elite::HeuristicFunctions::Euclidean);
+	auto path{ pathfinder.FindPath(pStartNode,pEndNode) };
+	for (auto pNode : path)
+	{
+		m_DebugNodePositions.push_back(pNode->GetPosition());
+		finalPath.push_back(pNode->GetPosition());
+	}
+
+	//Extra: Run optimiser on new graph, Make sure the A star path is fine before uncommenting this!
+	m_Portals = SSFA::FindPortals(path, m_pNavGraph->GetNavMeshPolygon());
+	finalPath = SSFA::OptimizePortals(m_Portals);
+
+	return finalPath;
 }
 
 void App_MicroMacroAI::UpdateImGui()

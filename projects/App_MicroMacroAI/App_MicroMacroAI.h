@@ -13,6 +13,7 @@ class NavigationColliderElement;
 class SteeringAgent;
 class Wander;
 class Flee;
+class Seek;
 
 namespace Elite
 {
@@ -38,12 +39,15 @@ public:
 	void Render(float deltaTime) const override;
 
 private:
+	const std::vector<Elite::Vector2> FindPath(const Elite::Vector2& startPos, const Elite::Vector2& endPos);
+
 	void UpdateImGui();
 
 	// --Agents--
 	SteeringAgent* m_pAgent = nullptr;
 	Wander* m_pWander = nullptr;
 	Flee* m_pFlee = nullptr;
+	Seek* m_pSeek = nullptr;
 	TargetData m_Target = {};
 	float m_AgentRadius = 1.0f;
 	float m_AgentSpeed = 16.0f;
