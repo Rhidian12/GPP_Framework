@@ -52,6 +52,7 @@
     <ClCompile Include="projects\App_QLearning\FMatrix.cpp" />
     <ClCompile Include="projects\App_QLearning\QLearning.cpp" />
     <ClCompile Include="projects\App_MicroMacroAI\App_MicroMacroAI.cpp" />
+    <ClCompile Include="projects\App_MicroMacroAI\MicroAIAgent.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="projects\App_Selector.h" />
@@ -154,5 +155,6 @@
     <ClInclude Include="projects\App_QLearning\FMatrix.h" />
     <ClInclude Include="projects\App_QLearning\QLearning.h" />
     <ClInclude Include="projects\App_MicroMacroAI\App_MicroMacroAI.h" />
+    <ClInclude Include="projects\App_MicroMacroAI\MicroAIAgent.h" />
   </ItemGroup>
 </Project>
