@@ -1,6 +1,10 @@
 #pragma once
 #include "../App_Steering/SteeringAgent.h"
 
+class Wander;
+class Flee;
+class Seek;
+
 class MicroAIAgent final : public SteeringAgent
 {
 public:
@@ -9,13 +13,21 @@ public:
 
 	//--- Agent Functions ---
 	virtual void Update(float dt) override;
+	void UpdateDecisionMaking(float dt);
 	virtual void Render(float dt) override;
 
-	//-- Agario Functions --
+	//-- AI Functions --
 	void SetDecisionMaking(Elite::IDecisionMaking* decisionMakingStructure);
+	void SetToWander();
+	void SetToSeek(const Elite::Vector2& target);
+	void SetToFlee(const Elite::Vector2& target);
+	
+	Elite::IDecisionMaking* GetFSM() const;
 
 private:
 	Elite::IDecisionMaking* m_DecisionMaking = nullptr;
-	bool m_ToDestroy = false;
-	float m_SpeedBase = 25.f;
+
+	Wander* m_pWander = nullptr;
+	Flee* m_pFlee = nullptr;
+	Seek* m_pSeek = nullptr;
 };

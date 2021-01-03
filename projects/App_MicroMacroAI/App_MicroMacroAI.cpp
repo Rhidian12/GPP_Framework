@@ -5,14 +5,21 @@
 #include "App_MicroMacroAI.h"
 #include "projects/Shared/NavigationColliderElement.h"
 
-#include "../App_Steering/SteeringAgent.h"
+#include "MicroAIAgent.h"
 #include "../App_Steering/SteeringBehaviors.h"
 
 #include "framework\EliteAI\EliteGraphs\ENavGraph.h"
 #include "framework\EliteAI\EliteGraphs\EliteGraphAlgorithms\EAStar.h"
 
+#include "framework/EliteAI/EliteData/EBlackboard.h"
+#include "framework/EliteAI/EliteDecisionMaking/EDecisionMaking.h"
+#include "framework/EliteAI/EliteDecisionMaking/EliteFiniteStateMachine/EFiniteStateMachine.h"
+#include "Behaviours.h"
+
+#include "CollisionFunctions.h"
+
 //Statics
-bool App_MicroMacroAI::sShowPolygon = true;
+bool App_MicroMacroAI::sShowPolygon = false;
 bool App_MicroMacroAI::sShowGraph = false;
 bool App_MicroMacroAI::sDrawPortals = false;
 bool App_MicroMacroAI::sDrawFinalPath = true;
@@ -29,6 +36,11 @@ App_MicroMacroAI::~App_MicroMacroAI()
 	SAFE_DELETE(m_pWander);
 	SAFE_DELETE(m_pFlee);
 	SAFE_DELETE(m_pSeek);
+
+	for (auto pTransition : m_pTransitions)
+		SAFE_DELETE(pTransition);
+	for (auto pState : m_pStates)
+		SAFE_DELETE(pState);
 }
 
 void App_MicroMacroAI::Start()
@@ -58,58 +70,103 @@ void App_MicroMacroAI::Start()
 
 	//----------- NAVMESH  ------------
 	std::list<Elite::Vector2> baseBox
-	{ { -100, 100 },{ -100, -100 },{ 100, -100 },{ 100, 100 } };
+	{ { -100.f, 100.f },{ -100.f, -100.f },{ 100.f, -100.f },{ 100.f, 100.f } };
 
 	m_pNavGraph = new Elite::NavGraph(Elite::Polygon(baseBox), m_AgentRadius);
+
+
+	//----------- CREATE CHECKPOINTS ------------
+	const int nrCheckpointsPerAxis{ 4 };
+	for (int y{ 0 }; y <= nrCheckpointsPerAxis; ++y)
+	{
+		for (int x{ 0 }; x <= nrCheckpointsPerAxis; ++x)
+		{
+			Elite::Vector2 position{ -80.f + (160.f / nrCheckpointsPerAxis * x), -80.f + (160.f / nrCheckpointsPerAxis * y) };
+			m_Checkpoints.push_back(Checkpoint{ position,false });
+		}
+	}
 
 	//----------- AGENT ------------
 	m_pWander = new Wander{};
 	m_pFlee = new Flee{};
 	m_pSeek = new Seek{};
 	m_Target = TargetData(Elite::ZeroVector2);
-	m_pAgent = new SteeringAgent();
+	m_pAgent = new MicroAIAgent{ {0.f,0.f} };
 	m_pAgent->SetSteeringBehavior(m_pSeek);
 	m_pAgent->SetMaxLinearSpeed(m_AgentSpeed);
 	m_pAgent->SetAutoOrient(true);
 	m_pAgent->SetMass(0.1f);
 	m_pAgent->SetBodyColor(Elite::Color{ 0.f,0.f,255.f });
+
+	//----------- Decision Making ------------
+	Blackboard* pBlackboard{ new Blackboard{} };
+	pBlackboard->AddData("target", Elite::Vector2{});
+	pBlackboard->AddData("microAI", m_pAgent);
+	pBlackboard->AddData("checkpoints", &m_Checkpoints);
+
+	WanderingState* pWanderState{ new WanderingState{} };
+	FollowSearchPatternState* pFollowSearchPatternState{ new FollowSearchPatternState{} };
+
+	m_pStates.push_back(pWanderState);
+	m_pStates.push_back(pFollowSearchPatternState);
+
+	HaveNotAllCheckpointsBeenVisited* pHaveNotAllCheckpointsBeenVisited{ new HaveNotAllCheckpointsBeenVisited{} };
+
+	m_pTransitions.push_back(pHaveNotAllCheckpointsBeenVisited);
+
+	FiniteStateMachine* pFSM{ new FiniteStateMachine{pWanderState,pBlackboard} };
+	pFSM->AddTransition(pWanderState, pFollowSearchPatternState, pHaveNotAllCheckpointsBeenVisited);
+
+	m_pAgent->SetDecisionMaking(pFSM);
+
+	//----------- SPAWN PICKUPS ------------
+	for (int i{}; i < 10; ++i)
+	{
+		Elite::Vector2 randomPosition{};
+		do
+		{
+			randomPosition = Elite::randomVector2(-85.f, 85.f);
+		} while ((std::find_if(m_vNavigationColliders.begin(), m_vNavigationColliders.end(), [&randomPosition](const NavigationColliderElement* a)->bool
+			{
+				const Elite::Rect hitbox{ a->GetPosition(),a->GetWidth(),a->GetHeight() };
+				const Elite::Rect pickupHitbox{ randomPosition,5.f,5.f };
+				return Elite::IsOverlapping(hitbox, pickupHitbox);
+			}) != m_vNavigationColliders.end()) && (std::find_if(m_Pickups.begin(), m_Pickups.end(), [&randomPosition](const Elite::Vector2& a)->bool
+				{
+					const Elite::Rect hitbox{ a,5.f,5.f };
+					const Elite::Rect pickupHitbox{ randomPosition,5.f,5.f };
+					return Elite::IsOverlapping(hitbox, pickupHitbox);
+				}) != m_Pickups.end()));
+		m_Pickups.push_back(randomPosition);
+	}
 }
 void App_MicroMacroAI::Update(float deltaTime)
 {
-	//Update target/path based on input
-	if (INPUTMANAGER->IsMouseButtonUp(InputMouseButton::eMiddle))
-	{
-		auto mouseData = INPUTMANAGER->GetMouseData(Elite::InputType::eMouseButton, Elite::InputMouseButton::eMiddle);
-		Elite::Vector2 mouseTarget = DEBUGRENDERER2D->GetActiveCamera()->ConvertScreenToWorld(
-			Elite::Vector2((float)mouseData.X, (float)mouseData.Y));
-		m_vPath = FindPath(m_pAgent->GetPosition(), mouseTarget);
-	}
+	m_pAgent->UpdateDecisionMaking(deltaTime);
 
-	//Check if a path exist and move to the following point
-	if (m_vPath.size() > 0)
+	Elite::FiniteStateMachine* pFSM{ dynamic_cast<FiniteStateMachine*>(m_pAgent->GetFSM()) };
+	if (pFSM->GetCurrentState() == m_pStates[1])
 	{
-		if (m_vPath.size() == 1)
-		{
-			m_pAgent->SetSteeringBehavior(m_pSeek);
-			m_pSeek->SetTarget(m_vPath[0]);
-		}
-		else
-		{
-			m_pAgent->SetSteeringBehavior(m_pSeek);
-			m_pSeek->SetTarget(m_vPath[0]);
-		}
+		Elite::Vector2 target{};
+		pFSM->GetBlackboard()->GetData("target", target);
+		m_vPath = FindPath(m_pAgent->GetPosition(), target);
 
-		if (Elite::DistanceSquared(m_pAgent->GetPosition(), m_vPath[0]) < m_AgentRadius * m_AgentRadius)
+		//Check if a path exist and move to the following point
+		if (m_vPath.size() > 0)
 		{
-			//If we reached the next point of the path. Remove it 
-			m_vPath.erase(std::remove(m_vPath.begin(), m_vPath.end(), m_vPath[0]));
+			m_pAgent->SetToSeek(m_vPath[0]);
+
+			if (Elite::DistanceSquared(m_pAgent->GetPosition(), m_vPath[0]) < m_AgentRadius * m_AgentRadius)
+			{
+				//If we reached the next point of the path. Remove it 
+				m_vPath.erase(std::remove(m_vPath.begin(), m_vPath.end(), m_vPath[0]));
+			}
 		}
 	}
-
-	UpdateImGui();
 
 	m_pAgent->Update(deltaTime);
-	//m_pAgent->TrimToWorld(Elite::Vector2{ -100.f,-100.f }, Elite::Vector2{ 100.f,100.f });
+
+	UpdateImGui();
 }
 void App_MicroMacroAI::Render(float deltaTime) const
 {
@@ -166,6 +223,57 @@ void App_MicroMacroAI::Render(float deltaTime) const
 	}
 #pragma endregion
 	//DEBUGRENDERER2D->DrawSolidCircle(m_pAgent->GetPosition(), m_pAgent->GetRadius(), Elite::Vector2{ 1.f,0.f }, Elite::Color{ 0.f,0.f,255.f,0.5f });
+	const float fovAngle{ Elite::ToRadians(30.f) };
+	const float fovRange{ 15.f };
+	const float c{ cos(fovAngle) };
+	const float s{ sin(fovAngle) };
+	const Elite::Vector2 linearVelocity{ m_pAgent->GetLinearVelocity() };
+
+	const Elite::Vector2 pointOne{ m_pAgent->GetPosition() };
+	const float newX{ linearVelocity.x * c - s * linearVelocity.y };
+	const float newY{ linearVelocity.x * s + c * linearVelocity.y };
+	const Elite::Vector2 rotatedLinearVelocity{ newX, newY };
+	Elite::Vector2 pointTwo{ m_pAgent->GetPosition().x + rotatedLinearVelocity.GetNormalized().x * (m_pAgent->GetRadius() + fovRange),
+									m_pAgent->GetPosition().y + rotatedLinearVelocity.GetNormalized().y * (m_pAgent->GetRadius() + fovRange) };
+
+	const float newX2{ linearVelocity.x * c - (-s) * linearVelocity.y };
+	const float newY2{ linearVelocity.x * (-s) + c * linearVelocity.y };
+	const Elite::Vector2 rotatedLinearVelocity2{ newX2, newY2 };
+	Elite::Vector2 pointThree{ m_pAgent->GetPosition().x + rotatedLinearVelocity2.GetNormalized().x * (m_pAgent->GetRadius() + fovRange),
+									m_pAgent->GetPosition().y + rotatedLinearVelocity2.GetNormalized().y * (m_pAgent->GetRadius() + fovRange) };
+
+	for (const auto& collider : m_vNavigationColliders)
+	{
+		Elite::Rect hitbox{ collider->GetPosition(),collider->GetWidth(),collider->GetHeight() };
+		Collisions::HitInfo hitInfo{};
+		if (Collisions::IsOverlapping(m_pAgent->GetPosition(), pointTwo, hitbox, hitInfo))
+		{
+			pointTwo = hitInfo.intersectPoint;
+		}
+		if (Collisions::IsOverlapping(m_pAgent->GetPosition(), pointThree, hitbox, hitInfo))
+		{
+			pointThree = hitInfo.intersectPoint;
+		}
+	}
+
+	std::vector<Elite::Vector2> reee{ pointOne,pointTwo,pointThree };
+	Elite::Polygon* pTriangle{ new Elite::Polygon{reee} };
+	DEBUGRENDERER2D->DrawPolygon(pTriangle, { 0.f,255.f,0.f });
+	//DEBUGRENDERER2D->DrawPoint(pointOne, 5.f, { 0.f,0.f,255.f });
+	//DEBUGRENDERER2D->DrawPoint(pointTwo, 5.f, { 0.f,0.f,255.f });
+	//DEBUGRENDERER2D->DrawPoint(pointThree, 5.f, { 0.f,0.f,255.f });
+
+	for (const auto& pickup : m_Pickups)
+	{
+		DEBUGRENDERER2D->DrawPoint(pickup, 5.f, { 0.f,0.f,255.f });
+	}
+	for (const auto& checkpoint : m_Checkpoints)
+	{
+		if (checkpoint.hasBeenVisited)
+			DEBUGRENDERER2D->DrawPoint(checkpoint.position, 5.f, { 0.f,255.f,0.f });
+		else
+			DEBUGRENDERER2D->DrawPoint(checkpoint.position, 5.f, { 255.f,0.f,0.f });
+	}
 }
 
 const std::vector<Elite::Vector2> App_MicroMacroAI::FindPath(const Elite::Vector2& startPos, const Elite::Vector2& endPos)

@@ -37,6 +37,21 @@ NavigationColliderElement::~NavigationColliderElement()
 	SAFE_DELETE(m_pRigidBody);
 }
 
+const Elite::Vector2& NavigationColliderElement::GetPosition() const
+{
+	return m_Position;
+}
+
+const float NavigationColliderElement::GetWidth() const
+{
+	return m_Width;
+}
+
+const float NavigationColliderElement::GetHeight() const
+{
+	return m_Height;
+}
+
 //=== Functions ===
 void NavigationColliderElement::RenderElement()
 {

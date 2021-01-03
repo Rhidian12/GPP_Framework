@@ -43,6 +43,7 @@ namespace Elite
 		void AddTransition(FSMState* startState, FSMState* toState, FSMTransition* transition);
 		virtual void Update(float deltaTime) override;
 		Elite::Blackboard* GetBlackboard() const;
+		FSMState* GetCurrentState() const;
 
 	private:
 		void SetState(FSMState* newState);

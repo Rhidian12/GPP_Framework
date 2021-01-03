@@ -53,6 +53,8 @@
     <ClCompile Include="projects\App_QLearning\QLearning.cpp" />
     <ClCompile Include="projects\App_MicroMacroAI\App_MicroMacroAI.cpp" />
     <ClCompile Include="projects\App_MicroMacroAI\MicroAIAgent.cpp" />
+    <ClCompile Include="projects\App_MicroMacroAI\Behaviours.cpp" />
+    <ClCompile Include="projects\App_MicroMacroAI\CollisionFunctions.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="projects\App_Selector.h" />
@@ -156,5 +158,8 @@
     <ClInclude Include="projects\App_QLearning\QLearning.h" />
     <ClInclude Include="projects\App_MicroMacroAI\App_MicroMacroAI.h" />
     <ClInclude Include="projects\App_MicroMacroAI\MicroAIAgent.h" />
+    <ClInclude Include="projects\App_MicroMacroAI\Behaviours.h" />
+    <ClInclude Include="projects\App_MicroMacroAI\CollisionFunctions.h" />
+    <ClInclude Include="projects\App_MicroMacroAI\Structs.h" />
   </ItemGroup>
 </Project>

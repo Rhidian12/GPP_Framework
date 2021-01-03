@@ -36,7 +36,7 @@ SteeringOutput SeperationFlocking::CalculateSteering(float deltaT, SteeringAgent
 
 				m_Target.Position = neighbourPosition;
 				steering.LinearVelocity += Flee::CalculateSteering(deltaT, pAgent).LinearVelocity.GetNormalized() *
-					pow(distanceToNeigbour, -1) * pAgent->GetMaxLinearSpeed();
+					float(pow(distanceToNeigbour, -1)) * pAgent->GetMaxLinearSpeed();
 
 				/*if (pAgent->CanRenderBehavior())
 				{

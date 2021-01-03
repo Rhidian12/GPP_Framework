@@ -119,6 +119,11 @@ namespace Elite
 			return v;
 		}
 
+		inline Vector2 Orthogonal() const
+		{
+			return Vector2{ -y,x };
+		}
+
 		inline auto DistanceSquared(const Vector2& v) const
 		{ return Square(v.x - x) + Square(v.y - y);	}
 

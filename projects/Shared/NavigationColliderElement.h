@@ -17,6 +17,10 @@ public:
 	NavigationColliderElement(const Elite::Vector2& position, float width, float height, float rotation);
 	~NavigationColliderElement();
 
+	const Elite::Vector2& GetPosition() const;
+	const float GetWidth() const;
+	const float GetHeight() const;
+
 	//--- Functions ---
 	void RenderElement();
 

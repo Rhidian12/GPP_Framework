@@ -9,11 +9,18 @@
 #include "framework\EliteAI\EliteGraphs\EliteGraphUtilities\EGraphRenderer.h"
 #include "framework\EliteAI\EliteNavigation\Algorithms\EPathSmoothing.h"
 
+#include "Structs.h"
+
 class NavigationColliderElement;
-class SteeringAgent;
 class Wander;
 class Flee;
 class Seek;
+class MicroAIAgent;
+namespace Elite
+{
+	class FSMState;
+	class FSMTransition;
+}
 
 namespace Elite
 {
@@ -44,13 +51,17 @@ private:
 	void UpdateImGui();
 
 	// --Agents--
-	SteeringAgent* m_pAgent = nullptr;
+	MicroAIAgent* m_pAgent = nullptr;
 	Wander* m_pWander = nullptr;
 	Flee* m_pFlee = nullptr;
 	Seek* m_pSeek = nullptr;
 	TargetData m_Target = {};
 	float m_AgentRadius = 1.0f;
-	float m_AgentSpeed = 16.0f;
+	float m_AgentSpeed = 5.f;
+	std::vector<Elite::Vector2> m_Pickups;
+	std::vector<Checkpoint> m_Checkpoints;
+	std::vector<Elite::FSMState*> m_pStates;
+	std::vector<Elite::FSMTransition*> m_pTransitions;
 
 	// --Level--
 	std::vector<NavigationColliderElement*> m_vNavigationColliders = {};

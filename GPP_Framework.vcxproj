@@ -298,6 +298,8 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="projects\App_MicroMacroAI\CollisionFunctions.cpp" />
+    <ClCompile Include="projects\App_MicroMacroAI\Behaviours.cpp" />
     <ClCompile Include="projects\App_MicroMacroAI\MicroAIAgent.cpp" />
     <ClCompile Include="projects\App_MicroMacroAI\App_MicroMacroAI.cpp" />
     <ClCompile Include="framework\EliteAI\EliteDecisionMaking\EliteBehaviorTree\EBehaviorTree.cpp" />
@@ -357,6 +359,8 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="projects\App_MicroMacroAI\CollisionFunctions.h" />
+    <ClInclude Include="projects\App_MicroMacroAI\Behaviours.h" />
     <ClInclude Include="projects\App_MicroMacroAI\MicroAIAgent.h" />
     <ClInclude Include="projects\App_MicroMacroAI\App_MicroMacroAI.h" />
     <ClInclude Include="framework\EliteAI\EliteData\EBlackboard.h" />
@@ -432,6 +436,7 @@
     <ClInclude Include="projects\App_InfluenceMap\App_AgarioGameInfluence.h" />
     <ClInclude Include="projects\App_InfluenceMap\App_InfluenceMap.h" />
     <ClInclude Include="projects\App_InfluenceMap\StatesAndTransitions.h" />
+    <ClInclude Include="projects\App_MicroMacroAI\Structs.h" />
     <ClInclude Include="projects\App_NavMeshGraph\App_NavMeshGraph.h" />
     <ClInclude Include="projects\App_PathfindingAStar\App_PathfindingAStar.h" />
     <ClInclude Include="projects\App_QLearning\App_MachineLearning.h" />
