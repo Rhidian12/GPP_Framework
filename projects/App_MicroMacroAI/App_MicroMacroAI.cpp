@@ -36,11 +36,21 @@ App_MicroMacroAI::~App_MicroMacroAI()
 	SAFE_DELETE(m_pWander);
 	SAFE_DELETE(m_pFlee);
 	SAFE_DELETE(m_pSeek);
+	SAFE_DELETE(m_pAlien);
 
-	for (auto pTransition : m_pTransitions)
-		SAFE_DELETE(pTransition);
-	for (auto pState : m_pStates)
+	for (auto pState : m_pPlayerStates)
 		SAFE_DELETE(pState);
+	m_pPlayerStates.clear();
+	for (auto pTransition : m_pPlayerTransitions)
+		SAFE_DELETE(pTransition);
+	m_pPlayerTransitions.clear();
+
+	for (auto pState : m_pAlienStates)
+		SAFE_DELETE(pState);
+	m_pAlienStates.clear();
+	for (auto pTransition : m_pAlienTransitions)
+		SAFE_DELETE(pTransition);
+	m_pAlienTransitions.clear();
 }
 
 void App_MicroMacroAI::Start()
@@ -68,6 +78,7 @@ void App_MicroMacroAI::Start()
 	m_vNavigationColliders.push_back(new NavigationColliderElement{ Elite::Vector2{0.f,5.f},90.f,1.f });
 	m_vNavigationColliders.push_back(new NavigationColliderElement{ Elite::Vector2{0.f,58.f},130.f,1.f });
 
+
 	//----------- NAVMESH  ------------
 	std::list<Elite::Vector2> baseBox
 	{ { -100.f, 100.f },{ -100.f, -100.f },{ 100.f, -100.f },{ 100.f, 100.f } };
@@ -87,54 +98,14 @@ void App_MicroMacroAI::Start()
 		}
 	}
 
-	//----------- AGENT ------------
-	m_pWander = new Wander{};
-	m_pFlee = new Flee{};
-	m_pSeek = new Seek{};
-	m_Target = TargetData(Elite::ZeroVector2);
-	m_pAgent = new MicroAIAgent{ {0.f,0.f} };
-	m_pAgent->SetSteeringBehavior(m_pSeek);
-	m_pAgent->SetMaxLinearSpeed(m_AgentSpeed);
-	m_pAgent->SetAutoOrient(true);
-	m_pAgent->SetMass(0.1f);
-	m_pAgent->SetBodyColor(Elite::Color{ 0.f,0.f,255.f });
 
-	//----------- Decision Making ------------
-	Blackboard* pBlackboard{ new Blackboard{} };
-	pBlackboard->AddData("target", Elite::Vector2{});
-	pBlackboard->AddData("microAI", m_pAgent);
-	pBlackboard->AddData("checkpoints", &m_Checkpoints);
-	pBlackboard->AddData("pickupsInFOV", GetPickupsInFOV());
-	pBlackboard->AddData("grabRange", m_GrabRange);
-	pBlackboard->AddData("pickups", &m_Pickups);
-	bool wasPickupSeen{};
-	pBlackboard->AddData("wasPickupSeen", wasPickupSeen);
+	//----------- PLAYER ------------
+	InitializePlayer();
+	
 
-	WanderingState* pWanderState{ new WanderingState{} };
-	FollowSearchPatternState* pFollowSearchPatternState{ new FollowSearchPatternState{} };
-	SeekState* pSeekState{ new SeekState{} };
-	PickupPickupState* pPickupPickupState{ new PickupPickupState{} };
+	//----------- PLAYER ------------
+	InitializeAlien();
 
-	m_pStates.push_back(pWanderState);
-	m_pStates.push_back(pFollowSearchPatternState);
-	m_pStates.push_back(pSeekState);
-	m_pStates.push_back(pPickupPickupState);
-
-	HaveNotAllCheckpointsBeenVisited* pHaveNotAllCheckpointsBeenVisited{ new HaveNotAllCheckpointsBeenVisited{} };
-	AreTherePickupsInFOV* pAreTherePickupsInFOV{ new AreTherePickupsInFOV{} };
-	IsAgentInPickupRange* pIsAgentInPickupRange{ new IsAgentInPickupRange{} };
-
-	m_pTransitions.push_back(pHaveNotAllCheckpointsBeenVisited);
-	m_pTransitions.push_back(pAreTherePickupsInFOV);
-	m_pTransitions.push_back(pIsAgentInPickupRange);
-
-	FiniteStateMachine* pFSM{ new FiniteStateMachine{pWanderState,pBlackboard} };
-	pFSM->AddTransition(pWanderState, pFollowSearchPatternState, pHaveNotAllCheckpointsBeenVisited);
-	pFSM->AddTransition(pFollowSearchPatternState, pSeekState, pAreTherePickupsInFOV);
-	pFSM->AddTransition(pSeekState, pPickupPickupState, pIsAgentInPickupRange);
-	pFSM->AddTransition(pPickupPickupState, pFollowSearchPatternState, pHaveNotAllCheckpointsBeenVisited);
-
-	m_pAgent->SetDecisionMaking(pFSM);
 
 	//----------- SPAWN PICKUPS ------------
 	for (int i{}; i < 10; ++i)
@@ -182,26 +153,114 @@ void App_MicroMacroAI::Start()
 		}
 	}
 
+
+	//----------- FOV ------------
 	const float fovAngle{ Elite::ToRadians(30.f) };
 	const float increment{ fovAngle * 0.2f };
 	m_FOVRaycasts.resize(unsigned int(fovAngle / increment * 2) + 1);
 }
+void App_MicroMacroAI::InitializePlayer()
+{
+	//----------- AGENT ------------
+	m_pWander = new Wander{};
+	m_pFlee = new Flee{};
+	m_pSeek = new Seek{};
+	m_Target = TargetData(Elite::ZeroVector2);
+	m_pAgent = new MicroAIAgent{ {-85.f,-85.f} };
+	m_pAgent->SetSteeringBehavior(m_pSeek);
+	m_pAgent->SetMaxLinearSpeed(m_AgentSpeed);
+	m_pAgent->SetAutoOrient(true);
+	m_pAgent->SetMass(0.1f);
+	m_pAgent->SetBodyColor(Elite::Color{ 0.f,0.f,255.f });
+
+
+	//----------- Decision Making ------------
+	Blackboard* pBlackboard{ new Blackboard{} };
+	pBlackboard->AddData("target", Elite::Vector2{});
+	pBlackboard->AddData("player", m_pAgent);
+	pBlackboard->AddData("checkpoints", &m_Checkpoints);
+	pBlackboard->AddData("pickupsInFOV", GetPickupsInFOV());
+	pBlackboard->AddData("grabRange", m_GrabRange);
+	pBlackboard->AddData("pickups", &m_Pickups);
+	bool wasPickupSeen{};
+	pBlackboard->AddData("wasPickupSeen", wasPickupSeen);
+
+	PlayerWander* pWanderState{ new PlayerWander{} };
+	FollowSearchPatternState* pFollowSearchPatternState{ new FollowSearchPatternState{} };
+	SeekState* pSeekState{ new SeekState{} };
+	PickupPickupState* pPickupPickupState{ new PickupPickupState{} };
+
+	m_pPlayerStates.push_back(pWanderState);
+	m_pPlayerStates.push_back(pFollowSearchPatternState);
+	m_pPlayerStates.push_back(pSeekState);
+	m_pPlayerStates.push_back(pPickupPickupState);
+
+	HaveNotAllCheckpointsBeenVisited* pHaveNotAllCheckpointsBeenVisited{ new HaveNotAllCheckpointsBeenVisited{} };
+	AreTherePickupsInFOV* pAreTherePickupsInFOV{ new AreTherePickupsInFOV{} };
+	IsAgentInPickupRange* pIsAgentInPickupRange{ new IsAgentInPickupRange{} };
+
+	m_pPlayerTransitions.push_back(pHaveNotAllCheckpointsBeenVisited);
+	m_pPlayerTransitions.push_back(pAreTherePickupsInFOV);
+	m_pPlayerTransitions.push_back(pIsAgentInPickupRange);
+
+	FiniteStateMachine* pFSM{ new FiniteStateMachine{pWanderState,pBlackboard} };
+	pFSM->AddTransition(pWanderState, pFollowSearchPatternState, pHaveNotAllCheckpointsBeenVisited);
+	pFSM->AddTransition(pFollowSearchPatternState, pSeekState, pAreTherePickupsInFOV);
+	pFSM->AddTransition(pSeekState, pPickupPickupState, pIsAgentInPickupRange);
+	pFSM->AddTransition(pPickupPickupState, pFollowSearchPatternState, pHaveNotAllCheckpointsBeenVisited);
+
+	m_pAgent->SetDecisionMaking(pFSM);
+}
+void App_MicroMacroAI::InitializeAlien()
+{
+	//----------- AGENT ------------
+	m_Target = TargetData(Elite::ZeroVector2);
+	m_pAlien = new MicroAIAgent{ {0.f,0.f} };
+	m_pAlien->SetSteeringBehavior(m_pSeek);
+	m_pAlien->SetMaxLinearSpeed(m_AgentSpeed);
+	m_pAlien->SetAutoOrient(true);
+	m_pAlien->SetMass(0.1f);
+	m_pAlien->SetBodyColor(Elite::Color{ 255.f,0.f,0.f });
+
+
+	//----------- Decision Making ------------
+	Blackboard* pBlackboard{ new Blackboard{} };
+	pBlackboard->AddData("target", Elite::Vector2{});
+	pBlackboard->AddData("alien", m_pAgent);
+	pBlackboard->AddData("checkpoints", &m_Checkpoints);
+	pBlackboard->AddData("pickupsInFOV", GetPickupsInFOV());
+
+	AlienWander* pWanderState{ new AlienWander{} };
+	SeekState* pSeekState{ new SeekState{} };
+
+	m_pAlienStates.push_back(pWanderState);
+
+	FiniteStateMachine* pFSM{ new FiniteStateMachine{pWanderState,pBlackboard} };
+
+	m_pAlien->SetDecisionMaking(pFSM);
+}
+
 void App_MicroMacroAI::Update(float deltaTime)
 {
-	//----------- GET FINITE STATE MACHINE ------------
-	Elite::FiniteStateMachine* pFSM{ dynamic_cast<FiniteStateMachine*>(m_pAgent->GetFSM()) };
+	//----------- GET PLAYER FINITE STATE MACHINE ------------
+	Elite::FiniteStateMachine* pFSM{ dynamic_cast<FiniteStateMachine*>(m_pAgent->GetDecisionMaking()) };
+
+
+	//----------- GET ALIEN BEHAVIOUR TREE ------------
+	//Elite::BehaviorTree* pBHT{ dynamic_cast<BehaviorTree*>(m_pAlien->GetDecisionMaking()) };
 
 
 	//----------- UPDATE BLACKBOARD ------------
 	pFSM->GetBlackboard()->ChangeData("pickupsInFOV", GetPickupsInFOV());
 
 
-	//----------- UPDATE FINITE STATE MACHINE ------------
+	//----------- UPDATE DECISION MAKING ------------
 	m_pAgent->UpdateDecisionMaking(deltaTime);
+	//m_pAlien->UpdateDecisionMaking(deltaTime);
 
 
 	//----------- UPDATE STEERING WITH NAVMESH ------------
-	if (pFSM->GetCurrentState() == m_pStates[1])
+	if (pFSM->GetCurrentState() == m_pPlayerStates[1])
 	{
 		Elite::Vector2 target{};
 		pFSM->GetBlackboard()->GetData("target", target);
@@ -223,6 +282,7 @@ void App_MicroMacroAI::Update(float deltaTime)
 
 	//----------- UPDATE AGENT ------------
 	m_pAgent->Update(deltaTime);
+	m_pAlien->Update(deltaTime);
 
 
 	//----------- UPDATE CHECKPOINTS ------------

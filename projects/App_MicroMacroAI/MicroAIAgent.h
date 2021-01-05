@@ -22,7 +22,7 @@ public:
 	void SetToSeek(const Elite::Vector2& target);
 	void SetToFlee(const Elite::Vector2& target);
 	
-	Elite::IDecisionMaking* GetFSM() const;
+	Elite::IDecisionMaking* GetDecisionMaking() const;
 
 private:
 	Elite::IDecisionMaking* m_DecisionMaking = nullptr;

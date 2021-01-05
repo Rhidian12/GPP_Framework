@@ -50,11 +50,14 @@ private:
 	const std::vector<Elite::Vector2> GetPickupsInFOV() const;
 	void UpdateCheckpoints();
 	void UpdateFOV();
+	void InitializePlayer();
+	void InitializeAlien();
 
 	void UpdateImGui();
 
 	// --Agents--
 	MicroAIAgent* m_pAgent = nullptr;
+	MicroAIAgent* m_pAlien = nullptr;
 	Wander* m_pWander = nullptr;
 	Flee* m_pFlee = nullptr;
 	Seek* m_pSeek = nullptr;
@@ -63,8 +66,10 @@ private:
 	float m_AgentSpeed = 5.f;
 	std::vector<Elite::Vector2> m_Pickups;
 	std::vector<Checkpoint> m_Checkpoints;
-	std::vector<Elite::FSMState*> m_pStates;
-	std::vector<Elite::FSMTransition*> m_pTransitions;
+	std::vector<Elite::FSMState*> m_pPlayerStates;
+	std::vector<Elite::FSMState*> m_pAlienStates;
+	std::vector<Elite::FSMTransition*> m_pPlayerTransitions;
+	std::vector<Elite::FSMTransition*> m_pAlienTransitions;
 	std::vector<Elite::Vector2> m_FOVRaycasts;
 	Elite::Polygon m_FOV{};
 	const float m_GrabRange{ 2.f };

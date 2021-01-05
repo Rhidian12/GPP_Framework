@@ -3,7 +3,9 @@
 #include "projects/App_Steering/SteeringBehaviors.h"
 
 MicroAIAgent::MicroAIAgent(const Elite::Vector2& position)
+	: SteeringAgent{}
 {
+	SetPosition(position);
 	m_pWander = new Wander{};
 	m_pFlee = new Flee{};
 	m_pSeek = new Seek{};
@@ -51,7 +53,7 @@ void MicroAIAgent::SetToFlee(const Elite::Vector2& target)
 	SteeringAgent::SetSteeringBehavior(m_pFlee);
 }
 
-Elite::IDecisionMaking* MicroAIAgent::GetFSM() const
+Elite::IDecisionMaking* MicroAIAgent::GetDecisionMaking() const
 {
 	return m_DecisionMaking;
 }

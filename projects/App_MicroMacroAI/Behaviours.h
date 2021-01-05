@@ -5,12 +5,19 @@
 // STATES
 // ============
 using namespace Elite;
-class WanderingState final : public Elite::FSMState
+class PlayerWander final : public Elite::FSMState
 {
 public:
 	virtual void OnEnter(Blackboard* pBlackboard) override;
 private:
 };
+class AlienWander final : public Elite::FSMState
+{
+public:
+	virtual void OnEnter(Blackboard* pBlackboard) override;
+private:
+};
+
 class FollowSearchPatternState final : public Elite::FSMState
 {
 public:

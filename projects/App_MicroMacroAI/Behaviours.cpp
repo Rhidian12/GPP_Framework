@@ -3,14 +3,25 @@
 #include "MicroAIAgent.h"
 #include "Structs.h"
 #include <limits>
-// ============ WANDER ============
-void WanderingState::OnEnter(Blackboard* pBlackboard)
+// ============ PLAYER WANDER ============
+void PlayerWander::OnEnter(Blackboard* pBlackboard)
 {
 	MicroAIAgent* pMicroAI{};
-	if (!pBlackboard->GetData("microAI", pMicroAI))
+	if (!pBlackboard->GetData("player", pMicroAI))
 		return;
 
 	pMicroAI->SetToWander();
+}
+
+
+// ============ ALIEN WANDER ============
+void AlienWander::OnEnter(Blackboard* pBlackboard)
+{
+	MicroAIAgent* pAlien{};
+	if (!pBlackboard->GetData("alien", pAlien))
+		return;
+
+	pAlien->SetToWander();
 }
 
 
@@ -19,7 +30,7 @@ void FollowSearchPatternState::OnEnter(Blackboard* pBlackboard)
 {
 	MicroAIAgent* pMicroAI{};
 	std::vector<Checkpoint>* pCheckpoints{};
-	if (!pBlackboard->GetData("microAI", pMicroAI) || !pBlackboard->GetData("checkpoints", pCheckpoints))
+	if (!pBlackboard->GetData("player", pMicroAI) || !pBlackboard->GetData("checkpoints", pCheckpoints))
 		return;
 
 	for (const auto& checkpoint : *pCheckpoints)
@@ -36,7 +47,7 @@ void FollowSearchPatternState::Update(Blackboard* pBlackboard, float deltaTime)
 {
 	MicroAIAgent* pMicroAI{};
 	std::vector<Checkpoint>* pCheckpoints{};
-	if (!pBlackboard->GetData("microAI", pMicroAI) || !pBlackboard->GetData("checkpoints", pCheckpoints))
+	if (!pBlackboard->GetData("player", pMicroAI) || !pBlackboard->GetData("checkpoints", pCheckpoints))
 		return;
 
 	for (const auto& checkpoint : *pCheckpoints)
@@ -50,12 +61,13 @@ void FollowSearchPatternState::Update(Blackboard* pBlackboard, float deltaTime)
 	}
 }
 
+
 // ============ SEEK ============
 void SeekState::OnEnter(Blackboard* pBlackboard)
 {
 	MicroAIAgent* pMicroAI{};
 	std::vector<Elite::Vector2> pickupsInFOV{};
-	if (!pBlackboard->GetData("microAI", pMicroAI) || !pBlackboard->GetData("pickupsInFOV", pickupsInFOV))
+	if (!pBlackboard->GetData("player", pMicroAI) || !pBlackboard->GetData("pickupsInFOV", pickupsInFOV))
 		return;
 
 	if (pickupsInFOV.size() == 1)
@@ -81,7 +93,7 @@ void SeekState::Update(Blackboard* pBlackboard, float deltaTime)
 {
 	MicroAIAgent* pMicroAI{};
 	std::vector<Elite::Vector2> pickupsInFOV{};
-	if (!pBlackboard->GetData("microAI", pMicroAI) || !pBlackboard->GetData("pickupsInFOV", pickupsInFOV))
+	if (!pBlackboard->GetData("player", pMicroAI) || !pBlackboard->GetData("pickupsInFOV", pickupsInFOV))
 		return;
 
 	if (pickupsInFOV.size() == 1)
@@ -112,7 +124,7 @@ void PickupPickupState::OnEnter(Blackboard* pBlackboard)
 	std::vector<Elite::Vector2> pickupsInFOV{};
 	std::vector<Elite::Vector2>* pickups{};
 	float grabRange{};
-	if (!pBlackboard->GetData("microAI", pMicroAI) || !pBlackboard->GetData("pickupsInFOV", pickupsInFOV) || !pBlackboard->GetData("pickups", pickups)
+	if (!pBlackboard->GetData("player", pMicroAI) || !pBlackboard->GetData("pickupsInFOV", pickupsInFOV) || !pBlackboard->GetData("pickups", pickups)
 		|| !pBlackboard->GetData("grabRange", grabRange))
 		return;
 
@@ -179,7 +191,7 @@ bool IsAgentInPickupRange::ToTransition(Blackboard* pBlackboard) const
 	MicroAIAgent* pMicroAI{};
 	float grabRange{};
 	std::vector<Elite::Vector2> pickupsInFOV{};
-	if (!pBlackboard->GetData("microAI", pMicroAI) || !pBlackboard->GetData("grabRange", grabRange) || !pBlackboard->GetData("pickupsInFOV", pickupsInFOV))
+	if (!pBlackboard->GetData("player", pMicroAI) || !pBlackboard->GetData("grabRange", grabRange) || !pBlackboard->GetData("pickupsInFOV", pickupsInFOV))
 		return false;
 
 	const Elite::Vector2 microAIPosition{ pMicroAI->GetPosition() };
