@@ -47,6 +47,9 @@ public:
 
 private:
 	const std::vector<Elite::Vector2> FindPath(const Elite::Vector2& startPos, const Elite::Vector2& endPos);
+	const std::vector<Elite::Vector2> GetPickupsInFOV() const;
+	void UpdateCheckpoints();
+	void UpdateFOV();
 
 	void UpdateImGui();
 
@@ -62,6 +65,9 @@ private:
 	std::vector<Checkpoint> m_Checkpoints;
 	std::vector<Elite::FSMState*> m_pStates;
 	std::vector<Elite::FSMTransition*> m_pTransitions;
+	std::vector<Elite::Vector2> m_FOVRaycasts;
+	Elite::Polygon m_FOV{};
+	const float m_GrabRange{ 2.f };
 
 	// --Level--
 	std::vector<NavigationColliderElement*> m_vNavigationColliders = {};
