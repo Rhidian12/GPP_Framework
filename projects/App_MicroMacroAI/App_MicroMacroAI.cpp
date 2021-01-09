@@ -6,6 +6,8 @@
 #include "projects/Shared/NavigationColliderElement.h"
 
 #include "MicroAIAgent.h"
+#include "Alien.h"
+
 #include "../App_Steering/SteeringBehaviors.h"
 
 #include "framework\EliteAI\EliteGraphs\ENavGraph.h"
@@ -15,8 +17,11 @@
 #include "framework/EliteAI/EliteDecisionMaking/EDecisionMaking.h"
 #include "framework/EliteAI/EliteDecisionMaking/EliteFiniteStateMachine/EFiniteStateMachine.h"
 #include "Behaviours.h"
+#include "AlienBehaviours.h"
+#include "Jobs.h"
 
 #include "CollisionFunctions.h"
+#include "MacroAI.h"
 
 //Statics
 bool App_MicroMacroAI::sShowPolygon = false;
@@ -37,6 +42,7 @@ App_MicroMacroAI::~App_MicroMacroAI()
 	SAFE_DELETE(m_pFlee);
 	SAFE_DELETE(m_pSeek);
 	SAFE_DELETE(m_pAlien);
+	SAFE_DELETE(m_pMacroAI);
 
 	for (auto pState : m_pPlayerStates)
 		SAFE_DELETE(pState);
@@ -101,14 +107,14 @@ void App_MicroMacroAI::Start()
 
 	//----------- PLAYER ------------
 	InitializePlayer();
-	
+
 
 	//----------- PLAYER ------------
 	InitializeAlien();
 
 
 	//----------- SPAWN PICKUPS ------------
-	for (int i{}; i < 10; ++i)
+	for (int i{}; i < m_MaxAmountOfPickups; ++i)
 	{
 		Elite::Vector2 randomPosition{};
 		do
@@ -127,12 +133,11 @@ void App_MicroMacroAI::Start()
 				}) != m_Pickups.end()));
 		m_Pickups.push_back(randomPosition);
 	}
-	const float fovRange{ 15.f };
 	for (size_t i{}; i < m_Pickups.size(); ++i)
 	{
-		auto it = std::find_if(m_Pickups.begin(), m_Pickups.end(), [this, &fovRange, &i](const Elite::Vector2& a)->bool
+		auto it = std::find_if(m_Pickups.begin(), m_Pickups.end(), [this, &i](const Elite::Vector2& a)->bool
 			{
-				return Elite::DistanceSquared(m_Pickups[i], a) <= Elite::Square(fovRange + 5.f);
+				return Elite::DistanceSquared(m_Pickups[i], a) <= Elite::Square(m_PlayerFOVRange + 5.f);
 			});
 		if (it != m_Pickups.end())
 		{
@@ -145,9 +150,9 @@ void App_MicroMacroAI::Start()
 					const Elite::Rect hitbox{ a->GetPosition(),a->GetWidth(),a->GetHeight() };
 					const Elite::Rect pickupHitbox{ randomPosition,5.f,5.f };
 					return Elite::IsOverlapping(hitbox, pickupHitbox);
-				}) != m_vNavigationColliders.end()) || (std::find_if(m_Pickups.begin(), m_Pickups.end(), [&randomPosition, &fovRange](const Elite::Vector2& a)->bool
+				}) != m_vNavigationColliders.end()) || (std::find_if(m_Pickups.begin(), m_Pickups.end(), [&randomPosition, this](const Elite::Vector2& a)->bool
 					{
-						return Elite::DistanceSquared(randomPosition, a) <= Elite::Square(fovRange + 5.f);
+						return Elite::DistanceSquared(randomPosition, a) <= Elite::Square(m_PlayerFOVRange + 5.f);
 					}) != m_Pickups.end()));
 			m_Pickups[i] = randomPosition;
 		}
@@ -155,9 +160,15 @@ void App_MicroMacroAI::Start()
 
 
 	//----------- FOV ------------
-	const float fovAngle{ Elite::ToRadians(30.f) };
-	const float increment{ fovAngle * 0.2f };
-	m_FOVRaycasts.resize(unsigned int(fovAngle / increment * 2) + 1);
+	const float playerIncrement{ m_PlayerFOVAngle * 0.2f };
+	m_PlayerFOVRaycasts.resize(unsigned int(m_PlayerFOVAngle / playerIncrement * 2) + 1);
+
+	m_AlienFOVs.resize(m_AlienFOVAngles.size());
+	m_AlienFOVsRaycasts.resize(m_AlienFOVAngles.size());
+	for (size_t i{}; i < m_AlienFOVsRaycasts.size(); ++i)
+	{
+		m_AlienFOVsRaycasts[i].resize(11);
+	}
 }
 void App_MicroMacroAI::InitializePlayer()
 {
@@ -175,11 +186,11 @@ void App_MicroMacroAI::InitializePlayer()
 
 
 	//----------- Decision Making ------------
-	Blackboard* pBlackboard{ new Blackboard{} };
+	Elite::Blackboard* pBlackboard{ new Elite::Blackboard{} };
 	pBlackboard->AddData("target", Elite::Vector2{});
 	pBlackboard->AddData("player", m_pAgent);
 	pBlackboard->AddData("checkpoints", &m_Checkpoints);
-	pBlackboard->AddData("pickupsInFOV", GetPickupsInFOV());
+	pBlackboard->AddData("pickupsInFOV", GetPickupsInPlayerFOV());
 	pBlackboard->AddData("grabRange", m_GrabRange);
 	pBlackboard->AddData("pickups", &m_Pickups);
 	bool wasPickupSeen{};
@@ -215,7 +226,7 @@ void App_MicroMacroAI::InitializeAlien()
 {
 	//----------- AGENT ------------
 	m_Target = TargetData(Elite::ZeroVector2);
-	m_pAlien = new MicroAIAgent{ {0.f,0.f} };
+	m_pAlien = new Alien{ {0.f,0.f} };
 	m_pAlien->SetSteeringBehavior(m_pSeek);
 	m_pAlien->SetMaxLinearSpeed(m_AgentSpeed);
 	m_pAlien->SetAutoOrient(true);
@@ -224,20 +235,71 @@ void App_MicroMacroAI::InitializeAlien()
 
 
 	//----------- Decision Making ------------
-	Blackboard* pBlackboard{ new Blackboard{} };
-	pBlackboard->AddData("target", Elite::Vector2{});
-	pBlackboard->AddData("alien", m_pAgent);
-	pBlackboard->AddData("checkpoints", &m_Checkpoints);
-	pBlackboard->AddData("pickupsInFOV", GetPickupsInFOV());
+	Elite::Blackboard* pBlackboard{ new Elite::Blackboard{} };
+	pBlackboard->AddData("alienTarget", Elite::Vector2{});
+	pBlackboard->AddData("alien", m_pAlien);
+	pBlackboard->AddData("agent", m_pAgent);
+	bool isPlayerInFOV{};
+	pBlackboard->AddData("isPlayerInFOV", isPlayerInFOV);
+	float isPlayerInFOVTimer{};
+	pBlackboard->AddData("isPlayerInFOVTimer", isPlayerInFOVTimer);
+	bool isPursuitAvailable{};
+	pBlackboard->AddData("isPursuitAvailable", isPursuitAvailable);
+	bool isHearingEnabled{};
+	pBlackboard->AddData("isHearingEnabled", isHearingEnabled);
+	pBlackboard->AddData("investigationTarget", Elite::Vector2{});
+	pBlackboard->AddData("rotatedTarget", Elite::Vector2{});
+	bool hasRotated180Degrees{};
+	pBlackboard->AddData("hasRotated180Degrees", hasRotated180Degrees);
+	pBlackboard->AddData("jobs", &m_pAlien->GetJobs());
+	bool hasReachedInvestigationTarget{};
+	pBlackboard->AddData("hasReachedInvestigationTarget", hasReachedInvestigationTarget);
+	float cooldownTimer{};
+	pBlackboard->AddData("cooldownTimer", cooldownTimer);
+	bool isCooldownActive{};
+	pBlackboard->AddData("isCooldownActive", isCooldownActive);
 
-	AlienWander* pWanderState{ new AlienWander{} };
-	SeekState* pSeekState{ new SeekState{} };
 
-	m_pAlienStates.push_back(pWanderState);
+	Elite::BehaviorTree* pBHT{ new Elite::BehaviorTree
+		{ pBlackboard,
+			new BehaviorSelector{
+				{
+					new BehaviorSequence{ // == CHASE PLAYER ==
+						{
+							new BehaviorConditional{IsPlayerInFOV},
+							new BehaviorSelector{
+								{
+									new BehaviorSequence{
+										{
+											new BehaviorConditional{IsPursuitAvailable},
+											new BehaviorAction{PursuitPlayer}
+										}},
+									new BehaviorSequence{
+										{
+											new InvertedBehaviorConditional{IsPursuitAvailable},
+											new BehaviorAction{ChasePlayer}
+										}}
+								}}
+						}},
+					new BehaviorSelector{ // == EXECUTE JOBS ==
+						{
+							new BehaviorSequence{
+								{
+									new BehaviorConditional{IsThereACurrentJob},
+									new BehaviorAction{ExecuteFirstJob}
+								}},
+							new BehaviorSequence{
+								{
+									new InvertedBehaviorConditional{IsThereACurrentJob},
+									new BehaviorAction{MakeJob}
+								}}
+						}},
+					new BehaviorAction{WanderBehaviour}
+				}}
+		}
+	};
 
-	FiniteStateMachine* pFSM{ new FiniteStateMachine{pWanderState,pBlackboard} };
-
-	m_pAlien->SetDecisionMaking(pFSM);
+	m_pAlien->SetDecisionMaking(pBHT);
 }
 
 void App_MicroMacroAI::Update(float deltaTime)
@@ -247,16 +309,25 @@ void App_MicroMacroAI::Update(float deltaTime)
 
 
 	//----------- GET ALIEN BEHAVIOUR TREE ------------
-	//Elite::BehaviorTree* pBHT{ dynamic_cast<BehaviorTree*>(m_pAlien->GetDecisionMaking()) };
+	Elite::BehaviorTree* pBHT{ dynamic_cast<BehaviorTree*>(m_pAlien->GetDecisionMaking()) };
 
 
 	//----------- UPDATE BLACKBOARD ------------
-	pFSM->GetBlackboard()->ChangeData("pickupsInFOV", GetPickupsInFOV());
+	pFSM->GetBlackboard()->ChangeData("pickupsInFOV", GetPickupsInPlayerFOV());
+	pBHT->GetBlackboard()->ChangeData("isPlayerInFOV", IsPlayerInAlienFOV(pBHT->GetBlackboard(), deltaTime));
+	bool isCooldownActive{};
+	pBHT->GetBlackboard()->GetData("isCooldownActive", isCooldownActive);
+	if (isCooldownActive)
+	{
+		float cooldownTimer{};
+		pBHT->GetBlackboard()->GetData("cooldownTimer", cooldownTimer);
+		pBHT->GetBlackboard()->ChangeData("cooldownTimer", cooldownTimer + deltaTime);
+	}
 
 
 	//----------- UPDATE DECISION MAKING ------------
 	m_pAgent->UpdateDecisionMaking(deltaTime);
-	//m_pAlien->UpdateDecisionMaking(deltaTime);
+	m_pAlien->UpdateDecisionMaking(deltaTime);
 
 
 	//----------- UPDATE STEERING WITH NAVMESH ------------
@@ -264,23 +335,50 @@ void App_MicroMacroAI::Update(float deltaTime)
 	{
 		Elite::Vector2 target{};
 		pFSM->GetBlackboard()->GetData("target", target);
-		m_vPath = FindPath(m_pAgent->GetPosition(), target);
+		m_AgentPath = FindPath(m_pAgent->GetPosition(), target, m_pAgent);
 
 		//Check if a path exist and move to the following point
-		if (m_vPath.size() > 0)
+		if (m_AgentPath.size() > 0)
 		{
-			m_pAgent->SetToSeek(m_vPath[0]);
+			m_pAgent->SetToSeek(m_AgentPath[0]);
 
-			if (Elite::DistanceSquared(m_pAgent->GetPosition(), m_vPath[0]) < m_AgentRadius * m_AgentRadius)
+			if (Elite::DistanceSquared(m_pAgent->GetPosition(), m_AgentPath[0]) < m_AgentRadius * m_AgentRadius)
 			{
 				//If we reached the next point of the path. Remove it 
-				m_vPath.erase(std::remove(m_vPath.begin(), m_vPath.end(), m_vPath[0]));
+				m_AgentPath.erase(std::remove(m_AgentPath.begin(), m_AgentPath.end(), m_AgentPath[0]));
+			}
+		}
+	}
+	if (m_pAlien->GetJobs()[0]->GetJobType() == JobType::INVESTIGATE)
+	{
+		bool hasReachedInvestigationTarget{};
+		pBHT->GetBlackboard()->GetData("hasReachedInvestigationTarget", hasReachedInvestigationTarget);
+		if (!hasReachedInvestigationTarget)
+		{
+			Elite::Vector2 investigationTarget{};
+			pBHT->GetBlackboard()->GetData("investigationTarget", investigationTarget);
+			m_AlienPath = FindPath(m_pAlien->GetPosition(), investigationTarget, m_pAlien);
+
+			//Check if a path exist and move to the following point
+			if (m_AlienPath.size() > 0)
+			{
+				m_pAlien->SetToSeek(m_AlienPath[0]);
+
+				if (Elite::DistanceSquared(m_pAlien->GetPosition(), m_AlienPath[0]) < m_AgentRadius * m_AgentRadius)
+				{
+					//If we reached the next point of the path. Remove it 
+					m_AlienPath.erase(std::remove(m_AlienPath.begin(), m_AlienPath.end(), m_AlienPath[0]));
+				}
 			}
 		}
 	}
 
 
-	//----------- UPDATE AGENT ------------
+	//----------- UPDATE MACRO AI ------------
+	m_pMacroAI->Update(m_Pickups, 10, pBHT->GetBlackboard());
+
+
+	//----------- UPDATE AGENTS ------------
 	m_pAgent->Update(deltaTime);
 	m_pAlien->Update(deltaTime);
 
@@ -289,8 +387,12 @@ void App_MicroMacroAI::Update(float deltaTime)
 	UpdateCheckpoints();
 
 
-	//----------- UPDATE FOV ------------
-	UpdateFOV();
+	//----------- UPDATE PLAYER FOV ------------
+	UpdatePlayerFOV();
+
+
+	//----------- UPDATE ALIEN FOV ------------
+	UpdateAlienFOV();
 
 
 	//----------- UPDATE IMGUI ------------
@@ -323,30 +425,31 @@ void App_MicroMacroAI::UpdateCheckpoints()
 			checkpoint.hasBeenVisited = false;
 	}
 }
-void App_MicroMacroAI::UpdateFOV()
+void App_MicroMacroAI::UpdatePlayerFOV()
 {
-	const float fovAngle{ Elite::ToRadians(30.f) };
-	const float fovRange{ 15.f };
-	const float c{ cos(fovAngle) };
-	const float s{ sin(fovAngle) };
-	const Elite::Vector2 linearVelocity{ m_pAgent->GetLinearVelocity() };
+	const float c{ cos(m_PlayerFOVAngle) };
+	const float s{ sin(m_PlayerFOVAngle) };
+	const Elite::Vector2 orientationToVector{ Elite::OrientationToVector(m_pAgent->GetOrientation()) };
 
 	const Elite::Vector2 pointOne{ m_pAgent->GetPosition() };
-	const float newX{ linearVelocity.x * c - s * linearVelocity.y };
-	const float newY{ linearVelocity.x * s + c * linearVelocity.y };
+	const float newX{ orientationToVector.x * c - s * orientationToVector.y };
+	const float newY{ orientationToVector.x * s + c * orientationToVector.y };
 	const Elite::Vector2 rotatedLinearVelocity{ newX, newY };
-	Elite::Vector2 pointTwo{ m_pAgent->GetPosition().x + rotatedLinearVelocity.GetNormalized().x * (m_pAgent->GetRadius() + fovRange),
-									m_pAgent->GetPosition().y + rotatedLinearVelocity.GetNormalized().y * (m_pAgent->GetRadius() + fovRange) };
+	Elite::Vector2 pointTwo{ m_pAgent->GetPosition().x + rotatedLinearVelocity.GetNormalized().x * (m_pAgent->GetRadius() + m_PlayerFOVRange),
+									m_pAgent->GetPosition().y + rotatedLinearVelocity.GetNormalized().y * (m_pAgent->GetRadius() + m_PlayerFOVRange) };
 
-	const float newX2{ linearVelocity.x * c - (-s) * linearVelocity.y };
-	const float newY2{ linearVelocity.x * (-s) + c * linearVelocity.y };
+	const float newX2{ orientationToVector.x * c - (-s) * orientationToVector.y };
+	const float newY2{ orientationToVector.x * (-s) + c * orientationToVector.y };
 	const Elite::Vector2 rotatedLinearVelocity2{ newX2, newY2 };
-	Elite::Vector2 pointThree{ m_pAgent->GetPosition().x + rotatedLinearVelocity2.GetNormalized().x * (m_pAgent->GetRadius() + fovRange),
-									m_pAgent->GetPosition().y + rotatedLinearVelocity2.GetNormalized().y * (m_pAgent->GetRadius() + fovRange) };
+	Elite::Vector2 pointThree{ m_pAgent->GetPosition().x + rotatedLinearVelocity2.GetNormalized().x * (m_pAgent->GetRadius() + m_PlayerFOVRange),
+									m_pAgent->GetPosition().y + rotatedLinearVelocity2.GetNormalized().y * (m_pAgent->GetRadius() + m_PlayerFOVRange) };
 
 	for (const auto& collider : m_vNavigationColliders)
 	{
-		Elite::Rect hitbox{ collider->GetPosition(),collider->GetWidth(),collider->GetHeight() };
+		const Elite::Vector2 position{ collider->GetPosition() };
+		const float width{ collider->GetWidth() };
+		const float height{ collider->GetHeight() };
+		Elite::Rect hitbox{ {position.x - width / 2.f, position.y - height / 2.f},width, height };
 		Collisions::HitInfo hitInfo{};
 		if (Collisions::IsOverlapping(m_pAgent->GetPosition(), pointTwo, hitbox, hitInfo))
 		{
@@ -358,27 +461,93 @@ void App_MicroMacroAI::UpdateFOV()
 		}
 	}
 
-	std::vector<Elite::Vector2> points{ pointOne,pointTwo,pointThree };
-	m_FOV = Elite::Polygon{ points };
+	std::vector<Elite::Vector2> pointsOfTriangle{ pointOne,pointTwo,pointThree };
+	m_PlayerFOV = Elite::Polygon{ pointsOfTriangle };
 
 	int counter{};
-	for (float i{ -s }; i <= s; i += s * 0.2f)
+	const float amountOfRaycasts{ s / (s * 10.f) }; // 0.10f => Gives us 10 raycasts
+	for (float i{ -s }; i <= s; i += amountOfRaycasts)
 	{
-		const float newX3{ linearVelocity.x * c - i * linearVelocity.y };
-		const float newY3{ linearVelocity.x * i + c * linearVelocity.y };
+		const float newX3{ orientationToVector.x * c - i * orientationToVector.y };
+		const float newY3{ orientationToVector.x * i + c * orientationToVector.y };
 		const Elite::Vector2 rotatedLinearVelocity3{ newX3, newY3 };
-		Elite::Vector2 point{ m_pAgent->GetPosition().x + rotatedLinearVelocity3.GetNormalized().x * (m_pAgent->GetRadius() + fovRange),
-								m_pAgent->GetPosition().y + rotatedLinearVelocity3.GetNormalized().y * (m_pAgent->GetRadius() + fovRange) };
+		Elite::Vector2 outerPointOfFOV{ m_pAgent->GetPosition().x + rotatedLinearVelocity3.GetNormalized().x * (m_pAgent->GetRadius() + m_PlayerFOVRange),
+								m_pAgent->GetPosition().y + rotatedLinearVelocity3.GetNormalized().y * (m_pAgent->GetRadius() + m_PlayerFOVRange) };
 
 		Elite::Vector2 array[2] = { pointTwo,pointThree };
 
 		Collisions::HitInfo hitInfo{};
-		if (Collisions::Raycast(array, 2, m_pAgent->GetPosition(), point, hitInfo))
+		if (Collisions::Raycast(array, 2, m_pAgent->GetPosition(), outerPointOfFOV, hitInfo))
 		{
-			point = hitInfo.intersectPoint;
+			outerPointOfFOV = hitInfo.intersectPoint;
 		}
 
-		m_FOVRaycasts[counter++] = point;
+		m_PlayerFOVRaycasts[counter++] = outerPointOfFOV;
+	}
+}
+void App_MicroMacroAI::UpdateAlienFOV()
+{
+	for (size_t i{}; i < m_AlienFOVsRaycasts.size(); ++i)
+	{
+		const float c{ cos(m_AlienFOVAngles[i]) };
+		const float s{ sin(m_AlienFOVAngles[i]) };
+		const Elite::Vector2 orientationVector{ Elite::OrientationToVector(m_pAlien->GetOrientation()) };
+
+		const Elite::Vector2 pointOne{ m_pAlien->GetPosition() };
+
+		const float newX{ orientationVector.x * c - s * orientationVector.y };
+		const float newY{ orientationVector.x * s + c * orientationVector.y };
+		const Elite::Vector2 rotatedLinearVelocity{ newX, newY };
+		Elite::Vector2 pointTwo{ m_pAlien->GetPosition().x + rotatedLinearVelocity.GetNormalized().x * (m_pAlien->GetRadius() + m_AlienFOVRanges[i]),
+										m_pAlien->GetPosition().y + rotatedLinearVelocity.GetNormalized().y * (m_pAlien->GetRadius() + m_AlienFOVRanges[i]) };
+
+		const float newX2{ orientationVector.x * c - (-s) * orientationVector.y };
+		const float newY2{ orientationVector.x * (-s) + c * orientationVector.y };
+		const Elite::Vector2 rotatedLinearVelocity2{ newX2, newY2 };
+		Elite::Vector2 pointThree{ m_pAlien->GetPosition().x + rotatedLinearVelocity2.GetNormalized().x * (m_pAlien->GetRadius() + m_AlienFOVRanges[i]),
+										m_pAlien->GetPosition().y + rotatedLinearVelocity2.GetNormalized().y * (m_pAlien->GetRadius() + m_AlienFOVRanges[i]) };
+
+		for (const auto& collider : m_vNavigationColliders)
+		{
+			const Elite::Vector2 position{ collider->GetPosition() };
+			const float width{ collider->GetWidth() };
+			const float height{ collider->GetHeight() };
+			Elite::Rect hitbox{ {position.x - width / 2.f, position.y - height / 2.f},width, height };
+			Collisions::HitInfo hitInfo{};
+			if (Collisions::IsOverlapping(m_pAlien->GetPosition(), pointTwo, hitbox, hitInfo))
+			{
+				pointTwo = hitInfo.intersectPoint;
+			}
+			if (Collisions::IsOverlapping(m_pAlien->GetPosition(), pointThree, hitbox, hitInfo))
+			{
+				pointThree = hitInfo.intersectPoint;
+			}
+		}
+
+		std::vector<Elite::Vector2> pointsOfTriangle{ pointOne,pointTwo,pointThree };
+		m_AlienFOVs[i] = Elite::Polygon{ pointsOfTriangle };
+
+		int counter{};
+		// 2s
+		const float amountOfRaycasts{ s / 5 };
+		for (float j{ -s }; j <= s; j += amountOfRaycasts)
+		{
+			const float newX3{ orientationVector.x * c - j * orientationVector.y };
+			const float newY3{ orientationVector.x * j + c * orientationVector.y };
+			const Elite::Vector2 rotatedLinearVelocity3{ newX3, newY3 };
+			Elite::Vector2 outerPointOfFOV{ m_pAlien->GetPosition().x + rotatedLinearVelocity3.GetNormalized().x * (m_pAlien->GetRadius() + m_AlienFOVRanges[i]),
+									m_pAlien->GetPosition().y + rotatedLinearVelocity3.GetNormalized().y * (m_pAlien->GetRadius() + m_AlienFOVRanges[i]) };
+
+			Elite::Vector2 array[2] = { pointTwo,pointThree };
+
+			Collisions::HitInfo hitInfo{};
+			if (Collisions::Raycast(array, 2, m_pAlien->GetPosition(), outerPointOfFOV, hitInfo))
+			{
+				outerPointOfFOV = hitInfo.intersectPoint;
+			}
+
+			m_AlienFOVsRaycasts[i][counter++] = outerPointOfFOV;
+		}
 	}
 }
 void App_MicroMacroAI::Render(float deltaTime) const
@@ -420,28 +589,34 @@ void App_MicroMacroAI::Render(float deltaTime) const
 			DEBUGRENDERER2D->DrawCircle(pathNode, 2.0f, Color(0.f, 0.f, 1.f), -0.45f);
 	}
 
-	if (sDrawFinalPath && m_vPath.size() > 0)
+	if (sDrawFinalPath && m_AgentPath.size() > 0)
 	{
 
-		for (auto pathPoint : m_vPath)
+		for (auto pathPoint : m_AgentPath)
 			DEBUGRENDERER2D->DrawCircle(pathPoint, 2.0f, Color(1.f, 0.f, 0.f), -0.2f);
 
-		DEBUGRENDERER2D->DrawSegment(m_pAgent->GetPosition(), m_vPath[0], Color(1.f, 0.0f, 0.0f), -0.2f);
-		for (size_t i = 0; i < m_vPath.size() - 1; i++)
+		DEBUGRENDERER2D->DrawSegment(m_pAgent->GetPosition(), m_AgentPath[0], Color(1.f, 0.0f, 0.0f), -0.2f);
+		for (size_t i = 0; i < m_AgentPath.size() - 1; i++)
 		{
-			float g = float(i) / m_vPath.size();
-			DEBUGRENDERER2D->DrawSegment(m_vPath[i], m_vPath[i + 1], Color(1.f, g, g), -0.2f);
+			float g = float(i) / m_AgentPath.size();
+			DEBUGRENDERER2D->DrawSegment(m_AgentPath[i], m_AgentPath[i + 1], Color(1.f, g, g), -0.2f);
 		}
 
 	}
 #pragma endregion
 
-	//----------- RENDER FOV ------------
-	DEBUGRENDERER2D->DrawPolygon(const_cast<Elite::Polygon*>(&m_FOV), { 0.f,255.f,0.f });
+	//----------- RENDER PLAYER FOV ------------
+	DEBUGRENDERER2D->DrawPolygon(const_cast<Elite::Polygon*>(&m_PlayerFOV), { 0.f,255.f,0.f });
+
+
+	//----------- RENDER ALIEN FOV ------------
+	DEBUGRENDERER2D->DrawPolygon(const_cast<Elite::Polygon*>(&m_AlienFOVs[0]), { 255.f,0.f,0.f });
+	DEBUGRENDERER2D->DrawPolygon(const_cast<Elite::Polygon*>(&m_AlienFOVs[1]), { 0.f,255.f,0.f });
+	DEBUGRENDERER2D->DrawPolygon(const_cast<Elite::Polygon*>(&m_AlienFOVs[2]), { 0.f,0.f,255.f });
 
 
 	//----------- RENDER FOV RAYCASTS ------------
-	for (const auto& rayCast : m_FOVRaycasts)
+	for (const auto& rayCast : m_PlayerFOVRaycasts)
 	{
 		DEBUGRENDERER2D->DrawSegment(m_pAgent->GetPosition(), rayCast, { 0.f,0.f,255.f });
 		//DEBUGRENDERER2D->DrawPoint(rayCast, 5.f, { 0.f,0.f,255.f });
@@ -464,7 +639,8 @@ void App_MicroMacroAI::Render(float deltaTime) const
 			DEBUGRENDERER2D->DrawPoint(checkpoint.position, 5.f, { 255.f,0.f,0.f });
 	}
 
-	for (const auto& hits : GetPickupsInFOV())
+
+	for (const auto& hits : GetPickupsInPlayerFOV())
 	{
 		DEBUGRENDERER2D->DrawCircle(hits, 10.f, { 255.f,255.f,0.f }, -1.f);
 	}
@@ -474,7 +650,7 @@ void App_MicroMacroAI::Render(float deltaTime) const
 	DEBUGRENDERER2D->DrawCircle(m_pAgent->GetPosition(), m_GrabRange, { 255.f,0.f,0.f }, -1.f);
 }
 
-const std::vector<Elite::Vector2> App_MicroMacroAI::FindPath(const Elite::Vector2& startPos, const Elite::Vector2& endPos)
+const std::vector<Elite::Vector2> App_MicroMacroAI::FindPath(const Elite::Vector2& startPos, const Elite::Vector2& endPos, MicroAIAgent* pAgent)
 {
 	//Create the path to return
 	std::vector<Elite::Vector2> finalPath{};
@@ -504,7 +680,7 @@ const std::vector<Elite::Vector2> App_MicroMacroAI::FindPath(const Elite::Vector
 	int index{ pCopiedGraph->GetNextFreeNodeIndex() };
 
 	//Create extra node for the Start Node (Agent's position)
-	Elite::NavGraphNode* pStartNode{ new Elite::NavGraphNode{index,pStartTriangle->metaData.IndexLines[0],m_pAgent->GetPosition()} };
+	Elite::NavGraphNode* pStartNode{ new Elite::NavGraphNode{index,pStartTriangle->metaData.IndexLines[0],pAgent->GetPosition()} };
 	pCopiedGraph->AddNode(pStartNode);
 
 	for (auto pEdge : pStartTriangle->metaData.IndexLines)
@@ -569,13 +745,13 @@ const std::vector<Elite::Vector2> App_MicroMacroAI::FindPath(const Elite::Vector
 	return finalPath;
 }
 
-const std::vector<Elite::Vector2> App_MicroMacroAI::GetPickupsInFOV() const
+const std::vector<Elite::Vector2> App_MicroMacroAI::GetPickupsInPlayerFOV() const
 {
 	std::vector<Elite::Vector2> pickUpsSeen{};
 
 	const Elite::Vector2 agentPosition{ m_pAgent->GetPosition() };
 	const float pickupSize{ 5.f };
-	for (const auto& ray : m_FOVRaycasts)
+	for (const auto& ray : m_PlayerFOVRaycasts)
 	{
 		for (const auto& pickup : m_Pickups)
 		{
@@ -591,6 +767,53 @@ const std::vector<Elite::Vector2> App_MicroMacroAI::GetPickupsInFOV() const
 	}
 	return pickUpsSeen;
 }
+bool App_MicroMacroAI::IsPlayerInAlienFOV(Elite::Blackboard* pBlackboard, const float dt) const
+{
+	const Elite::Vector2 agentPosition{ m_pAgent->GetPosition() };
+	const Elite::Vector2 alienPosition{ m_pAlien->GetPosition() };
+	const float playerHitboxSize{ 3.f };
+	for (size_t i{}; i < m_AlienFOVs.size(); ++i)
+	{
+		for (const auto& navMeshCollider : m_vNavigationColliders)
+		{
+			const Elite::Vector2 position{ navMeshCollider->GetPosition() };
+			const float width{ navMeshCollider->GetWidth() };
+			const float height{ navMeshCollider->GetHeight() };
+			Elite::Rect hitbox{ {position.x - width / 2.f, position.y - height / 2.f},width, height };
+			Collisions::HitInfo hitInfo{};
+			if (!Collisions::IsOverlapping(alienPosition, agentPosition, hitbox, hitInfo)) // no wall between alien and player
+			{
+				if (i == 0)
+				{
+					for (const auto& ray : m_AlienFOVsRaycasts[i])
+					{
+						if (Elite::IsSegmentIntersectingWithCircle(alienPosition, ray, agentPosition, playerHitboxSize))
+						{
+							float isPlayerInFOVTimer{};
+							pBlackboard->GetData("isPlayerInFOVTimer", isPlayerInFOVTimer);
+							isPlayerInFOVTimer += dt;
+							pBlackboard->ChangeData("isPlayerInFOVTimer", isPlayerInFOVTimer);
+							if (isPlayerInFOVTimer >= 2.f)
+							{
+								pBlackboard->ChangeData("isPlayerInFOVTimer", 0.f);
+								return true;
+							}
+							break; // only increment the timer once
+						}
+					}
+				}
+				else
+				{
+					for (const auto& ray : m_AlienFOVsRaycasts[i])
+						if (Elite::IsSegmentIntersectingWithCircle(alienPosition, ray, agentPosition, playerHitboxSize)) // no wall between alien and player
+							return true;
+				}
+			}
+		}
+	}
+	return false;
+}
+
 
 void App_MicroMacroAI::UpdateImGui()
 {
@@ -641,6 +864,14 @@ void App_MicroMacroAI::UpdateImGui()
 		if (ImGui::SliderFloat("AgentSpeed", &m_AgentSpeed, 0.0f, 22.0f))
 		{
 			m_pAgent->SetMaxLinearSpeed(m_AgentSpeed);
+		}
+
+		ImGui::Spacing();
+		ImGui::Spacing();
+
+		if (ImGui::SliderFloat("AlienSpeed", &m_AlienSpeed, 0.0f, 22.0f))
+		{
+			m_pAlien->SetMaxLinearSpeed(m_AlienSpeed);
 		}
 
 		//End

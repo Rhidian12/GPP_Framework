@@ -298,6 +298,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="projects\App_MicroMacroAI\Jobs.cpp" />
+    <ClCompile Include="projects\App_MicroMacroAI\Alien.cpp" />
+    <ClCompile Include="projects\App_MicroMacroAI\Job.cpp" />
+    <ClCompile Include="projects\App_MicroMacroAI\MacroAI.cpp" />
+    <ClCompile Include="projects\App_MicroMacroAI\AlienBehaviours.cpp" />
     <ClCompile Include="projects\App_MicroMacroAI\CollisionFunctions.cpp" />
     <ClCompile Include="projects\App_MicroMacroAI\Behaviours.cpp" />
     <ClCompile Include="projects\App_MicroMacroAI\MicroAIAgent.cpp" />
@@ -359,6 +364,12 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="projects\App_MicroMacroAI\ExceptionHandler.h" />
+    <ClInclude Include="projects\App_MicroMacroAI\Jobs.h" />
+    <ClInclude Include="projects\App_MicroMacroAI\Alien.h" />
+    <ClInclude Include="projects\App_MicroMacroAI\Job.h" />
+    <ClInclude Include="projects\App_MicroMacroAI\MacroAI.h" />
+    <ClInclude Include="projects\App_MicroMacroAI\AlienBehaviours.h" />
     <ClInclude Include="projects\App_MicroMacroAI\CollisionFunctions.h" />
     <ClInclude Include="projects\App_MicroMacroAI\Behaviours.h" />
     <ClInclude Include="projects\App_MicroMacroAI\MicroAIAgent.h" />

@@ -16,6 +16,8 @@ class Wander;
 class Flee;
 class Seek;
 class MicroAIAgent;
+class Alien;
+class MacroAI;
 namespace Elite
 {
 	class FSMState;
@@ -46,10 +48,12 @@ public:
 	void Render(float deltaTime) const override;
 
 private:
-	const std::vector<Elite::Vector2> FindPath(const Elite::Vector2& startPos, const Elite::Vector2& endPos);
-	const std::vector<Elite::Vector2> GetPickupsInFOV() const;
+	const std::vector<Elite::Vector2> FindPath(const Elite::Vector2& startPos, const Elite::Vector2& endPos, MicroAIAgent* pAgent);
+	const std::vector<Elite::Vector2> GetPickupsInPlayerFOV() const;
+	bool IsPlayerInAlienFOV(Elite::Blackboard* pBlackboard, const float dt) const;
 	void UpdateCheckpoints();
-	void UpdateFOV();
+	void UpdatePlayerFOV();
+	void UpdateAlienFOV();
 	void InitializePlayer();
 	void InitializeAlien();
 
@@ -57,28 +61,39 @@ private:
 
 	// --Agents--
 	MicroAIAgent* m_pAgent = nullptr;
-	MicroAIAgent* m_pAlien = nullptr;
+	Alien* m_pAlien = nullptr;
 	Wander* m_pWander = nullptr;
 	Flee* m_pFlee = nullptr;
 	Seek* m_pSeek = nullptr;
 	TargetData m_Target = {};
+	MacroAI* m_pMacroAI = nullptr;
 	float m_AgentRadius = 1.0f;
 	float m_AgentSpeed = 5.f;
+	float m_AlienSpeed = 5.f;
 	std::vector<Elite::Vector2> m_Pickups;
+	const int m_MaxAmountOfPickups{ 10 };
 	std::vector<Checkpoint> m_Checkpoints;
 	std::vector<Elite::FSMState*> m_pPlayerStates;
 	std::vector<Elite::FSMState*> m_pAlienStates;
 	std::vector<Elite::FSMTransition*> m_pPlayerTransitions;
 	std::vector<Elite::FSMTransition*> m_pAlienTransitions;
-	std::vector<Elite::Vector2> m_FOVRaycasts;
-	Elite::Polygon m_FOV{};
+	std::vector<Elite::Vector2> m_PlayerFOVRaycasts;
+	Elite::Polygon m_PlayerFOV{};
+	std::vector<Elite::Polygon> m_AlienFOVs{};
+	const std::vector<float> m_AlienFOVAngles{Elite::ToRadians(45.f), Elite::ToRadians(22.5f), Elite::ToRadians(80.f)};
+	const std::vector<float> m_AlienFOVRanges{ 30.f,15.f,5.f };
+	std::vector<std::vector<Elite::Vector2>> m_AlienFOVsRaycasts{};
 	const float m_GrabRange{ 2.f };
+	const float m_PlayerFOVAngle{ Elite::ToRadians(30.f) };
+	const float m_PlayerFOVRange{ 15.f };
+	
 
 	// --Level--
 	std::vector<NavigationColliderElement*> m_vNavigationColliders = {};
 
 	// --Pathfinder--
-	std::vector<Elite::Vector2> m_vPath;
+	std::vector<Elite::Vector2> m_AgentPath;
+	std::vector<Elite::Vector2> m_AlienPath;
 
 	// --Graph--
 	Elite::NavGraph* m_pNavGraph = nullptr;

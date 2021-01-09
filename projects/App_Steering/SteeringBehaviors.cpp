@@ -89,23 +89,22 @@ SteeringOutput Face::CalculateSteering(float deltaT, SteeringAgent* pAgent)
 {
 	SteeringOutput steering{};
 
-	steering.LinearVelocity = m_Target.Position - pAgent->GetPosition();
-	const float targetAngle{ Elite::GetOrientationFromVelocity(steering.LinearVelocity) };
+	Elite::Vector2 toTarget{ pAgent->GetPosition() - m_Target.Position };
 
-	steering.LinearVelocity *= 0;
+	float targetAngle{ atan2(toTarget.y, toTarget.x) + float(E_PI_2) };
+	float desiredAngle{ targetAngle - pAgent->GetOrientation() };
+	if (desiredAngle > E_PI) {
+		desiredAngle -= E_PI;
+	}
+	else
+	{
+		desiredAngle += E_PI;
+	}
+
+	steering.AngularVelocity = desiredAngle / float(E_PI) / 2.f * pAgent->GetMaxAngularSpeed();
 
 	pAgent->SetAutoOrient(false);
 
-	float targetAngleInDegrees{ abs(targetAngle * 180.f / float(M_PI)) };
-
-	if (m_Target.Position.x < pAgent->GetPosition().x)
-	{
-		targetAngleInDegrees = 360 - targetAngleInDegrees;
-	}
-
-	const float agentAngle{ abs(float(int(pAgent->GetRotation() * 180 / float(M_PI)) % 360)) };
-
-	steering.AngularVelocity = targetAngleInDegrees - agentAngle;
 
 	return steering;
 }
@@ -115,6 +114,10 @@ Pursuit::Pursuit(SteeringAgent* pTarget)
 	: m_pTarget{ pTarget }
 {
 
+}
+void Pursuit::SetAgentTarget(SteeringAgent* pAgent)
+{
+	m_pTarget = pAgent;
 }
 SteeringOutput Pursuit::CalculateSteering(float deltaT, SteeringAgent* pAgent)
 {

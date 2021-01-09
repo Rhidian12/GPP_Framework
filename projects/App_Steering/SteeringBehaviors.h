@@ -113,6 +113,8 @@ public:
 	Pursuit(SteeringAgent* pTarget);
 	virtual ~Pursuit() = default;
 
+	void SetAgentTarget(SteeringAgent* pAgent);
+
 	SteeringOutput CalculateSteering(float deltaT, SteeringAgent* pAgent) override;
 protected:
 	SteeringAgent* m_pTarget;

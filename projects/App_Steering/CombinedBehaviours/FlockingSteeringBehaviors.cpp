@@ -132,7 +132,7 @@ SteeringOutput RunAway::CalculateSteering(float deltaT, SteeringAgent* pAgent)
 
 		m_Target.Position = positionOfAgentToAvoid;
 		steering.LinearVelocity += Flee::CalculateSteering(deltaT, pAgent).LinearVelocity.GetNormalized() *
-			pow(distanceToTarget, -1) * pAgent->GetMaxLinearSpeed();
+			float(pow(distanceToTarget, -1)) * pAgent->GetMaxLinearSpeed();
 
 		if (pAgent->CanRenderBehavior())
 		{

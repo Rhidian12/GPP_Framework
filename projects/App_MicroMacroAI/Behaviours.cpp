@@ -14,17 +14,6 @@ void PlayerWander::OnEnter(Blackboard* pBlackboard)
 }
 
 
-// ============ ALIEN WANDER ============
-void AlienWander::OnEnter(Blackboard* pBlackboard)
-{
-	MicroAIAgent* pAlien{};
-	if (!pBlackboard->GetData("alien", pAlien))
-		return;
-
-	pAlien->SetToWander();
-}
-
-
 // ============ FOLLOW SEARCH PATTERN ============
 void FollowSearchPatternState::OnEnter(Blackboard* pBlackboard)
 {
