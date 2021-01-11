@@ -16,6 +16,7 @@ For this research project, I decided not to use Unity or Unreal Engine, but the 
 * The ability to rotate navigation colliders 90 degrees in the navigation mesh.
 
 ![Rotate Navigation Colliders](https://github.com/Rhidian12/GPP_Framework/blob/master/RotateNavigationColliders.png)
+<img src="GPP_Framework/blob/master/RotateNavigationColliders.png">
 
 * Some collision detection functionality, such as ray-casting.
 
