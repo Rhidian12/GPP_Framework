@@ -349,7 +349,7 @@ The micro and macro AI are also more connected in *Alien: Isolation* than they a
 ### Conclusion
 The macro AI is solely used to control the flow of the game. It decides when enemies need to be spawned, when the micro AI unlocks its new behaviour, how much health pickups the player can find, and so on. It does this by dynamically checking the world and the players.</br>
 A macro AI never directly manages a micro AI. The micro AI has its own tasks to perform and it is responsible for those tasks. The macro-AI can nonetheless assign new jobs to the micro AI or enable it to use one of its more advanced behaviours.</br>
-The micro AI is mostly unaware of the macro AI. It has its own decision-making structure, and it is dependent on that.
+The micro AI is mostly unaware of the macro AI. It has its own decision-making structure and it is dependent on that.
 
 The synergy between micro and macro AI is at peak display in both *Left 4 Dead* and *Alien: Isolation*, even though there are very few similarities between the games.
 Both games expertly control the flow of the game to create the most enjoyable experience possible, by ensuring that the game is hard enough, but not brutally impossible, which is the final and most important goal of the macro AI.
