@@ -6,7 +6,8 @@
 #include "ExceptionHandler.h"
 #include "Jobs.h"
 #include "Job.h"
-void MacroAI::Update(const std::vector<Elite::Vector2>& pickupsInWorld, const int maxAmountOfPickups, Elite::Blackboard* pAlienBlackboard)
+#include "CollisionFunctions.h"
+void MacroAI::Update(const std::vector<Elite::Vector2>& pickupsInWorld, const int maxAmountOfPickups, Elite::Blackboard* pAlienBlackboard, const Elite::Rect& worldBounds)
 {
 	Alien* pAlien{};
 	MicroAIAgent* pPlayer{};
@@ -25,19 +26,36 @@ void MacroAI::Update(const std::vector<Elite::Vector2>& pickupsInWorld, const in
 		pAlienBlackboard->ChangeData("isPursuitAvailable", true);
 	}
 
+
+	// Alien can only have 1 priority job
 	if (pAlien->GetJobs()[0]->GetJobPriority() != JobPriority::PRIORITY)
 	{
-		const float maxDistanceBetweenAgents{ 150.f };
-		if (Elite::DistanceSquared(pPlayer->GetPosition(), pAlien->GetPosition()) >= (maxDistanceBetweenAgents * maxDistanceBetweenAgents))
+		const float cornersOfWorldSize{ 50.f };
+		const Elite::Vector2 playerPosition{ pPlayer->GetPosition() };
+		if(IsPlayerInACornerOfTheWorld(playerPosition,worldBounds,cornersOfWorldSize))
 		{
-			CalculateInvestigationTarget(pAlienBlackboard);
+			// player is in a corner of the world
+			if (m_LastPriorityJobAdded != JobType::COOLDOWN) // we don't want the alien to go on cooldown multiple times
+			{
+				if (Elite::DistanceSquared(playerPosition, pAlien->GetPosition()) <= (cornersOfWorldSize * cornersOfWorldSize))
+				{
+					pAlien->AddJob(new Job{ Cooldown,JobPriority::PRIORITY,JobType::COOLDOWN });
+					m_LastPriorityJobAdded = JobType::COOLDOWN;
+					std::cout << "PRIORITY COOLDOWN ADDED" << std::endl;
+				}
+			}
+		}
+		else if (Elite::DistanceSquared(playerPosition, pAlien->GetPosition()) >= (m_MaxDistanceBetweenAgents * m_MaxDistanceBetweenAgents))
+		{
+			CalculateInvestigationTargetNearPlayer(pAlienBlackboard);
 			pAlien->AddJob(new Job{ InvestigateArea,JobPriority::PRIORITY,JobType::INVESTIGATE });
+			m_LastPriorityJobAdded = JobType::INVESTIGATE;
 			std::cout << "PRIORITY INVESTIGATION ADDED" << std::endl;
 		}
 	}
 }
 
-void MacroAI::CalculateInvestigationTarget(Elite::Blackboard* pAlienBlackboard) const
+void MacroAI::CalculateInvestigationTargetNearPlayer(Elite::Blackboard* pAlienBlackboard) const
 {
 	Alien* pAlien{};
 	MicroAIAgent* pPlayer{};
@@ -55,4 +73,12 @@ void MacroAI::CalculateInvestigationTarget(Elite::Blackboard* pAlienBlackboard) 
 	} while (Elite::DistanceSquared(randomPosition, pPlayer->GetPosition()) <= (distanceToGo * distanceToGo));
 
 	pAlienBlackboard->ChangeData("investigationTarget", randomPosition);
+}
+
+const bool MacroAI::IsPlayerInACornerOfTheWorld(const Elite::Vector2& playerPosition, const Elite::Rect& worldBounds, const float cornerSize) const
+{
+	return (Collisions::IsPointInRect(playerPosition, Elite::Rect{ worldBounds.bottomLeft,cornerSize,cornerSize }) ||
+		Collisions::IsPointInRect(playerPosition, Elite::Rect{ {worldBounds.bottomLeft.x + worldBounds.width - cornerSize,worldBounds.bottomLeft.y},cornerSize,cornerSize }) ||
+		Collisions::IsPointInRect(playerPosition, Elite::Rect{ {worldBounds.bottomLeft.x + worldBounds.width - cornerSize,worldBounds.bottomLeft.y + worldBounds.height - cornerSize},cornerSize,cornerSize }) ||
+		Collisions::IsPointInRect(playerPosition, Elite::Rect{ {worldBounds.bottomLeft.x,worldBounds.bottomLeft.y + worldBounds.height - cornerSize},cornerSize,cornerSize }));
 }

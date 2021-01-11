@@ -16,6 +16,7 @@ enum class JobPriority
 enum class JobType
 {
 	INVESTIGATE = 0,
+	COOLDOWN = 1,
 };
 class Job
 {

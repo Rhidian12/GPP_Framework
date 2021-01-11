@@ -3,6 +3,11 @@
 #include <system_error>
 #include <future>
 #include <iostream>
+
+// This class was taken from the book
+// The C++ Standard Library Second Edition: A Tutorial and Reference
+// Author: Nicolai M. Josuttis
+// pages 50-51
 class ExceptionHandler
 {
 public:

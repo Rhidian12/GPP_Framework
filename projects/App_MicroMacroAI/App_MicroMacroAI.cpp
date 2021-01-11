@@ -169,6 +169,10 @@ void App_MicroMacroAI::Start()
 	{
 		m_AlienFOVsRaycasts[i].resize(11);
 	}
+
+
+	//----------- MACRO AI ------------
+	m_pMacroAI = new MacroAI{};
 }
 void App_MicroMacroAI::InitializePlayer()
 {
@@ -302,101 +306,117 @@ void App_MicroMacroAI::InitializeAlien()
 	m_pAlien->SetDecisionMaking(pBHT);
 }
 
+bool App_MicroMacroAI::DetectAgentCollision()
+{
+	const Elite::Rect playerHitbox{ m_pAgent->GetPosition(),m_pAgent->GetRadius(),m_pAgent->GetRadius() };
+	const Elite::Rect alienHitbox{ m_pAlien->GetPosition(),m_pAlien->GetRadius(),m_pAlien->GetRadius() };
+	return Elite::IsOverlapping(playerHitbox, alienHitbox);
+}
+
 void App_MicroMacroAI::Update(float deltaTime)
 {
-	//----------- GET PLAYER FINITE STATE MACHINE ------------
-	Elite::FiniteStateMachine* pFSM{ dynamic_cast<FiniteStateMachine*>(m_pAgent->GetDecisionMaking()) };
+
+	//----------- CHECK GAME OVER ------------
+	m_IsGameOver = DetectAgentCollision();
 
 
-	//----------- GET ALIEN BEHAVIOUR TREE ------------
-	Elite::BehaviorTree* pBHT{ dynamic_cast<BehaviorTree*>(m_pAlien->GetDecisionMaking()) };
-
-
-	//----------- UPDATE BLACKBOARD ------------
-	pFSM->GetBlackboard()->ChangeData("pickupsInFOV", GetPickupsInPlayerFOV());
-	pBHT->GetBlackboard()->ChangeData("isPlayerInFOV", IsPlayerInAlienFOV(pBHT->GetBlackboard(), deltaTime));
-	bool isCooldownActive{};
-	pBHT->GetBlackboard()->GetData("isCooldownActive", isCooldownActive);
-	if (isCooldownActive)
+	if (!m_IsGameOver)
 	{
-		float cooldownTimer{};
-		pBHT->GetBlackboard()->GetData("cooldownTimer", cooldownTimer);
-		pBHT->GetBlackboard()->ChangeData("cooldownTimer", cooldownTimer + deltaTime);
-	}
+		//----------- GET PLAYER FINITE STATE MACHINE ------------
+		Elite::FiniteStateMachine* pFSM{ dynamic_cast<FiniteStateMachine*>(m_pAgent->GetDecisionMaking()) };
 
 
-	//----------- UPDATE DECISION MAKING ------------
-	m_pAgent->UpdateDecisionMaking(deltaTime);
-	m_pAlien->UpdateDecisionMaking(deltaTime);
+		//----------- GET ALIEN BEHAVIOUR TREE ------------
+		Elite::BehaviorTree* pBHT{ dynamic_cast<BehaviorTree*>(m_pAlien->GetDecisionMaking()) };
 
 
-	//----------- UPDATE STEERING WITH NAVMESH ------------
-	if (pFSM->GetCurrentState() == m_pPlayerStates[1])
-	{
-		Elite::Vector2 target{};
-		pFSM->GetBlackboard()->GetData("target", target);
-		m_AgentPath = FindPath(m_pAgent->GetPosition(), target, m_pAgent);
-
-		//Check if a path exist and move to the following point
-		if (m_AgentPath.size() > 0)
+		//----------- UPDATE BLACKBOARD ------------
+		pFSM->GetBlackboard()->ChangeData("pickupsInFOV", GetPickupsInPlayerFOV());
+		pBHT->GetBlackboard()->ChangeData("isPlayerInFOV", IsPlayerInAlienFOV(pBHT->GetBlackboard(), deltaTime));
+		bool isCooldownActive{};
+		pBHT->GetBlackboard()->GetData("isCooldownActive", isCooldownActive);
+		if (isCooldownActive)
 		{
-			m_pAgent->SetToSeek(m_AgentPath[0]);
-
-			if (Elite::DistanceSquared(m_pAgent->GetPosition(), m_AgentPath[0]) < m_AgentRadius * m_AgentRadius)
-			{
-				//If we reached the next point of the path. Remove it 
-				m_AgentPath.erase(std::remove(m_AgentPath.begin(), m_AgentPath.end(), m_AgentPath[0]));
-			}
+			float cooldownTimer{};
+			pBHT->GetBlackboard()->GetData("cooldownTimer", cooldownTimer);
+			pBHT->GetBlackboard()->ChangeData("cooldownTimer", cooldownTimer + deltaTime);
 		}
-	}
-	if (m_pAlien->GetJobs()[0]->GetJobType() == JobType::INVESTIGATE)
-	{
-		bool hasReachedInvestigationTarget{};
-		pBHT->GetBlackboard()->GetData("hasReachedInvestigationTarget", hasReachedInvestigationTarget);
-		if (!hasReachedInvestigationTarget)
+
+
+		//----------- UPDATE DECISION MAKING ------------
+		m_pAgent->UpdateDecisionMaking(deltaTime);
+		m_pAlien->UpdateDecisionMaking(deltaTime);
+
+
+		//----------- UPDATE STEERING WITH NAVMESH ------------
+		if (pFSM->GetCurrentState() == m_pPlayerStates[1])
 		{
-			Elite::Vector2 investigationTarget{};
-			pBHT->GetBlackboard()->GetData("investigationTarget", investigationTarget);
-			m_AlienPath = FindPath(m_pAlien->GetPosition(), investigationTarget, m_pAlien);
+			Elite::Vector2 target{};
+			pFSM->GetBlackboard()->GetData("target", target);
+			m_AgentPath = FindPath(m_pAgent->GetPosition(), target, m_pAgent);
 
 			//Check if a path exist and move to the following point
-			if (m_AlienPath.size() > 0)
+			if (m_AgentPath.size() > 0)
 			{
-				m_pAlien->SetToSeek(m_AlienPath[0]);
+				m_pAgent->SetToSeek(m_AgentPath[0]);
 
-				if (Elite::DistanceSquared(m_pAlien->GetPosition(), m_AlienPath[0]) < m_AgentRadius * m_AgentRadius)
+				if (Elite::DistanceSquared(m_pAgent->GetPosition(), m_AgentPath[0]) < m_AgentRadius * m_AgentRadius)
 				{
 					//If we reached the next point of the path. Remove it 
-					m_AlienPath.erase(std::remove(m_AlienPath.begin(), m_AlienPath.end(), m_AlienPath[0]));
+					m_AgentPath.erase(std::remove(m_AgentPath.begin(), m_AgentPath.end(), m_AgentPath[0]));
 				}
 			}
 		}
+		if (m_pAlien->GetJobs()[0]->GetJobType() == JobType::INVESTIGATE)
+		{
+			bool hasReachedInvestigationTarget{};
+			pBHT->GetBlackboard()->GetData("hasReachedInvestigationTarget", hasReachedInvestigationTarget);
+			if (!hasReachedInvestigationTarget)
+			{
+				Elite::Vector2 investigationTarget{};
+				pBHT->GetBlackboard()->GetData("investigationTarget", investigationTarget);
+				m_AlienPath = FindPath(m_pAlien->GetPosition(), investigationTarget, m_pAlien);
+
+				//Check if a path exist and move to the following point
+				if (m_AlienPath.size() > 0)
+				{
+					m_pAlien->SetToSeek(m_AlienPath[0]);
+
+					if (Elite::DistanceSquared(m_pAlien->GetPosition(), m_AlienPath[0]) < m_AgentRadius * m_AgentRadius)
+					{
+						//If we reached the next point of the path. Remove it 
+						m_AlienPath.erase(std::remove(m_AlienPath.begin(), m_AlienPath.end(), m_AlienPath[0]));
+					}
+				}
+			}
+		}
+
+
+		//----------- UPDATE MACRO AI ------------
+		m_pMacroAI->Update(m_Pickups, 10, pBHT->GetBlackboard(), Elite::Rect{ { -100.f,-100.f }, 200.f, 200.f });
+
+
+		//----------- UPDATE AGENTS ------------
+		m_pAgent->Update(deltaTime);
+		m_pAlien->Update(deltaTime);
+
+		//----------- UPDATE CHECKPOINTS ------------
+		UpdateCheckpoints();
+
+
+		//----------- UPDATE PLAYER FOV ------------
+		UpdatePlayerFOV();
+
+
+		//----------- UPDATE ALIEN FOV ------------
+		UpdateAlienFOV();
+
+
+		//----------- UPDATE IMGUI ------------
+		UpdateImGui();
 	}
-
-
-	//----------- UPDATE MACRO AI ------------
-	m_pMacroAI->Update(m_Pickups, 10, pBHT->GetBlackboard());
-
-
-	//----------- UPDATE AGENTS ------------
-	m_pAgent->Update(deltaTime);
-	m_pAlien->Update(deltaTime);
-
-
-	//----------- UPDATE CHECKPOINTS ------------
-	UpdateCheckpoints();
-
-
-	//----------- UPDATE PLAYER FOV ------------
-	UpdatePlayerFOV();
-
-
-	//----------- UPDATE ALIEN FOV ------------
-	UpdateAlienFOV();
-
-
-	//----------- UPDATE IMGUI ------------
-	UpdateImGui();
+	else
+		UpdateEndgameImGui();
 }
 void App_MicroMacroAI::UpdateCheckpoints()
 {
@@ -880,4 +900,16 @@ void App_MicroMacroAI::UpdateImGui()
 	}
 #pragma endregion
 #endif
+}
+
+void App_MicroMacroAI::UpdateEndgameImGui()
+{
+	//Setup
+	int menuWidth = 150;
+	int const width = DEBUGRENDERER2D->GetActiveCamera()->GetWidth();
+	int const height = DEBUGRENDERER2D->GetActiveCamera()->GetHeight();
+	bool windowActive = true;
+	ImGui::SetNextWindowPos(ImVec2((float)width - menuWidth - 10, 10));
+	ImGui::SetNextWindowSize(ImVec2((float)menuWidth, (float)height - 90));
+	ImGui::Begin("Game Over", &windowActive, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
 }

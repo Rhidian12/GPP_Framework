@@ -5,6 +5,21 @@
 #include "Job.h"
 #include "Jobs.h"
 #include <deque>
+const Elite::Vector2 CalculateNewInvestigationArea(Elite::Blackboard* pBlackboard)
+{
+	Alien* pAlien{};
+	if (!pBlackboard->GetData("alien", pAlien))
+		return Elite::Vector2{};
+
+	const float distanceToGo{ 150.f };
+	Elite::Vector2 randomPosition{};
+	do
+	{
+		randomPosition = Elite::randomVector2(-85.f, 85.f);
+	} while (Elite::DistanceSquared(randomPosition, pAlien->GetPosition()) >= (distanceToGo * distanceToGo));
+	return randomPosition;
+}
+
 // -------- WANDER --------
 Elite::BehaviorState WanderBehaviour(Elite::Blackboard* pBlackboard)
 {
@@ -86,30 +101,25 @@ Elite::BehaviorState ExecuteFirstJob(Elite::Blackboard* pBlackboard)
 		return Elite::BehaviorState::Failure;
 
 	const JobState currentJobState{ (*pJobs)[0]->ExecuteJob(pBlackboard) };
+
 	switch (currentJobState)
 	{
 	case JobState::COMPLETE:
 		switch ((*pJobs)[0]->GetJobType())
 		{
-		case JobType::INVESTIGATE:
-		{
 			SAFE_DELETE((*pJobs)[0]);
 			pJobs->pop_front();
 
+		case JobType::INVESTIGATE:
+		case JobType::COOLDOWN:
 			if (pJobs->empty())
 			{
-				const float distanceToGo{ 150.f };
-				Elite::Vector2 randomPosition{};
-				do
-				{
-					randomPosition = Elite::randomVector2(-85.f, 85.f);
-				} while (Elite::DistanceSquared(randomPosition, pAlien->GetPosition()) >= (distanceToGo * distanceToGo));
+				const Elite::Vector2 randomPosition{ CalculateNewInvestigationArea(pBlackboard) };
 				pBlackboard->ChangeData("investigationTarget", randomPosition);
 				pAlien->AddJob(new Job{ InvestigateArea,JobPriority::NORMAL,JobType::INVESTIGATE });
 			}
 			return Elite::BehaviorState::Success;
-		}
-		break;
+			break;
 		default:
 			break;
 		}

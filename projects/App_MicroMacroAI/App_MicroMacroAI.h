@@ -56,8 +56,10 @@ private:
 	void UpdateAlienFOV();
 	void InitializePlayer();
 	void InitializeAlien();
+	bool DetectAgentCollision();
 
 	void UpdateImGui();
+	void UpdateEndgameImGui();
 
 	// --Agents--
 	MicroAIAgent* m_pAgent = nullptr;
@@ -86,7 +88,7 @@ private:
 	const float m_GrabRange{ 2.f };
 	const float m_PlayerFOVAngle{ Elite::ToRadians(30.f) };
 	const float m_PlayerFOVRange{ 15.f };
-	
+	bool m_IsGameOver;
 
 	// --Level--
 	std::vector<NavigationColliderElement*> m_vNavigationColliders = {};
