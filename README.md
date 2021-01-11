@@ -17,4 +17,4 @@ For this research project, I decided not to use the Unity or the Unreal Engine, 
 * Some collision detection functionality, such as ray-casting.
 * An **InvertedBehaviorConditional** node for the behaviour tree. This is easier and cleaner than having to implement **IsXConditionMet** and **IsXConditionNotMet** behaviours.
 
-![Image of Yaktocat](https://drive.google.com/file/d/1Wig5XoWRDQy2K7RZy33soapcpvW4dDQD/view?usp=sharing)
+![RotateNavigationColliders](https://github.com/Rhidian12/GPP_Framework/master/RotateNavigationColliders.png)
