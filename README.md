@@ -353,3 +353,13 @@ The micro AI is mostly unaware of the macro AI. It has its own decision-making s
 
 The synergy between micro and macro AI is at peak display in both *Left 4 Dead* and *Alien: Isolation*, even though there are very few similarities between the games.
 Both games expertly control the flow of the game to create the most enjoyable experience possible, by ensuring that the game is hard enough, but not brutally impossible, which is the final and most important goal of the macro AI.
+
+
+
+### Sources
+
+1. X. s.d..The Director. Left4DeadFandom. Retrieved from https://left4dead.fandom.com/wiki/The_Director
+2. Thompson, T.  (2017, April 24). The Perfect Organism – The AI of Alien: Isolation. Medium. Retrieved from https://becominghuman.ai/the-perfect-organism-d350c05d8960
+3. X. s.d.. The Director. Left4Dead Fandom. Retrieved from https://left4dead.fandom.com/wiki/The_Director#Director_Phases
+4. AI and Games. (2020, May 20). Revisiting the AI of Alien: Isolation | AI and Games [Video]. Youtube. https://www.youtube.com/watch?v=P7d5lF6U0eQ
+5. AI and Games. (2014, December 1). The Director AI of Left 4 Dead | AI and Games [Video]. Youtube. https://www.youtube.com/watch?v=WbHMxo11HcU&ab_channel=AIandGames
